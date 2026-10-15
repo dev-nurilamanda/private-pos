@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#3730a3" />
+    </linearGradient>
+  </defs>
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="112" fill="url(#grad)" />
+  
+  <!-- Cashier / Wallet / Register Icon in center -->
+  <g transform="translate(96, 96) scale(0.625)" fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Register Base -->
+    <rect x="40" y="240" width="432" height="200" rx="24" fill="#ffffff" fill-opacity="0.12" />
+    <line x1="80" y1="380" x2="432" y2="380" />
+    <circle cx="256" cy="380" r="14" fill="#ffffff" />
+    
+    <!-- Screen Display -->
+    <rect x="100" y="80" width="312" height="130" rx="16" fill="#ffffff" fill-opacity="0.25" />
+    <line x1="150" y1="145" x2="362" y2="145" stroke-width="20" />
+    <line x1="200" y1="210" x2="200" y2="240" stroke-width="24" />
+    <line x1="312" y1="210" x2="312" y2="240" stroke-width="24" />
+    
+    <!-- Cashier keypad / touch spots -->
+    <circle cx="140" cy="290" r="14" fill="#ffffff" />
+    <circle cx="200" cy="290" r="14" fill="#ffffff" />
+    <circle cx="260" cy="290" r="14" fill="#ffffff" />
+    <circle cx="320" cy="290" r="14" fill="#ffffff" />
+    <circle cx="380" cy="290" r="14" fill="#ffffff" />
+  </g>
+</svg>
