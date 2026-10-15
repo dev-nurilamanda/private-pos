@@ -15,6 +15,7 @@ import {
 import { db, seedDefaultWallets, type Wallet, type WalletCategory } from '../db/db';
 import { formatRupiah } from '../utils/formatters';
 import { WalletModal } from './WalletModal';
+import { useBackHandler } from '../context/NavigationContext';
 
 const categoryMeta: Record<
   WalletCategory,
@@ -41,6 +42,17 @@ export const WalletList: React.FC = () => {
   const [transferFee, setTransferFee] = useState<number>(0);
   const [transferNotes, setTransferNotes] = useState('');
   const [transferError, setTransferError] = useState<string | null>(null);
+
+  // Navigasi Bertingkat: Tutup modal transfer saldo jika terbuka
+  useBackHandler('wallet-transfer-modal', () => {
+    setIsTransferOpen(false);
+  }, isTransferOpen, 45);
+
+  // Navigasi Bertingkat: Tutup modal tambah/edit dompet jika terbuka
+  useBackHandler('wallet-manage-modal', () => {
+    setIsModalOpen(false);
+    setSelectedWallet(null);
+  }, isModalOpen, 40);
 
   const totalBalance = wallets.reduce((acc, w) => acc + (w.currentBalance || 0), 0);
 

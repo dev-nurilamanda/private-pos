@@ -16,6 +16,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Discount } from '../db/db';
 import { executeCartTransaction, type CartItem } from '../db/transactionService';
 import { formatRupiah } from '../utils/formatters';
+import { useBackHandler } from '../context/NavigationContext';
 
 export interface CheckoutBottomSheetProps {
   cart: CartItem[];
@@ -70,6 +71,16 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
   const [quickValue, setQuickValue] = useState<number>(10);
   const [quickMinPurchase, setQuickMinPurchase] = useState<number>(0);
   const [quickError, setQuickError] = useState<string | null>(null);
+
+  // Navigasi Bertingkat: Jika modal tambah diskon cepat terbuka, tutup modal dulu (priority 60)
+  useBackHandler('checkout-quick-add', () => {
+    setIsQuickAddOpen(false);
+  }, isQuickAddOpen, 60);
+
+  // Navigasi Bertingkat: Jika sedang di daftar pilih diskon, kembali ke ringkasan keranjang (priority 25)
+  useBackHandler('checkout-select-discount', () => {
+    setIsSelectingDiscount(false);
+  }, isSelectingDiscount, 25);
 
   const handleQuickAddDiscount = async (e: React.FormEvent) => {
     e.preventDefault();

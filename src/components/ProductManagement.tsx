@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { db, type Product } from '../db/db';
 import { formatRupiah } from '../utils/formatters';
+import { useBackHandler } from '../context/NavigationContext';
 
 interface ProductManagementProps {
   onBackToCashier?: () => void;
@@ -75,6 +76,17 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
   const [quickCostPrice, setQuickCostPrice] = useState<number>(0);
   const [quickSellingPrice, setQuickSellingPrice] = useState<number>(0);
   const [isSavingQuickPrice, setIsSavingQuickPrice] = useState(false);
+
+  // Navigasi Bertingkat: Tutup modal ubah harga cepat jika terbuka
+  useBackHandler('product-quick-price', () => {
+    setQuickPriceProduct(null);
+  }, !!quickPriceProduct, 45);
+
+  // Navigasi Bertingkat: Tutup modal tambah/edit produk penuh jika terbuka
+  useBackHandler('product-full-modal', () => {
+    setIsFullModalOpen(false);
+    setEditingProduct(null);
+  }, isFullModalOpen, 40);
 
   // Form Fields for Full Modal
   const [formName, setFormName] = useState('');

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { db, seedDefaultDiscounts, type Discount, type DiscountType } from '../db/db';
 import { formatRupiah } from '../utils/formatters';
+import { useBackHandler } from '../context/NavigationContext';
 
 interface DiscountManagementProps {
   onBackToCashier?: () => void;
@@ -24,6 +25,12 @@ export const DiscountManagement: React.FC<DiscountManagementProps> = ({
   const discounts = useLiveQuery(() => db.discounts.toArray(), []) || [];
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState<Discount | null>(null);
+
+  // Navigasi Bertingkat: Tutup modal diskon jika terbuka
+  useBackHandler('discount-modal', () => {
+    setIsModalOpen(false);
+    setEditingDiscount(null);
+  }, isModalOpen, 40);
 
   // Form states
   const [name, setName] = useState('');

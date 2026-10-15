@@ -4,6 +4,7 @@ import { Clock, Receipt, X, ArrowRight } from 'lucide-react';
 import { db, type Transaction } from '../db/db';
 import { settleUnpaidTransaction } from '../db/transactionService';
 import { formatRupiah, formatDateTime } from '../utils/formatters';
+import { useBackHandler } from '../context/NavigationContext';
 
 export const OrdersAndDebts: React.FC = () => {
   const transactions = useLiveQuery(
@@ -19,6 +20,11 @@ export const OrdersAndDebts: React.FC = () => {
   const [settleWalletId, setSettleWalletId] = useState('');
   const [settleMethod, setSettleMethod] = useState('CASH');
   const [isSettling, setIsSettling] = useState(false);
+
+  // Navigasi Bertingkat: Tutup modal pelunasan piutang jika terbuka
+  useBackHandler('orders-settle-modal', () => {
+    setSettleTxn(null);
+  }, !!settleTxn, 40);
 
   const unpaidCount = transactions.filter((t) => t.paymentStatus === 'UNPAID').length;
   const totalUnpaidNominal = transactions

@@ -30,8 +30,10 @@ import { ProductManagement } from './components/ProductManagement';
 import { DiscountManagement } from './components/DiscountManagement';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { formatRupiah } from './utils/formatters';
+import { NavigationProvider, useNavigation, useBackHandler } from './context/NavigationContext';
 
-export default function App() {
+function AppContent() {
+  const { navigateBack } = useNavigation();
   const [activeView, setActiveView] = useState<'cashier' | 'checkout' | 'wallets' | 'debts' | 'products' | 'discounts'>('cashier');
   const [subTab, setSubTab] = useState<'katalog' | 'manual' | 'pesanan'>('katalog');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -57,6 +59,58 @@ export default function App() {
     () => db.transactions.where('paymentStatus').equals('UNPAID').count(),
     []
   ) || 0;
+
+  // --- SISTEM NAVIGASI BERTINGKAT (LIFO Priority Stack) ---
+  // Tingkat 5: Modal Tambah Produk dari tombol (+)
+  useBackHandler(
+    'create-product-modal',
+    () => {
+      setIsCreateProductOpen(false);
+    },
+    isCreateProductOpen,
+    50
+  );
+
+  // Tingkat 4: Drawer Menu Samping (Hamburger)
+  useBackHandler(
+    'drawer-menu',
+    () => {
+      setIsDrawerOpen(false);
+    },
+    isDrawerOpen,
+    40
+  );
+
+  // Tingkat 3: Kolom Pencarian Header
+  useBackHandler(
+    'search-bar',
+    () => {
+      setIsSearchActive(false);
+      setSearchQuery('');
+    },
+    isSearchActive,
+    30
+  );
+
+  // Tingkat 2: Halaman Sub-Modul (Keranjang, Dompet, Produk, Diskon, Piutang) -> Kembali ke Kasir
+  useBackHandler(
+    'sub-view',
+    () => {
+      setActiveView('cashier');
+    },
+    activeView !== 'cashier',
+    20
+  );
+
+  // Tingkat 1: Sub-Tab di Kasir (Manual / Pesanan) -> Kembali ke Katalog Kasir
+  useBackHandler(
+    'cashier-subtab',
+    () => {
+      setSubTab('katalog');
+    },
+    activeView === 'cashier' && subTab !== 'katalog',
+    10
+  );
 
   useEffect(() => {
     seedDefaultWallets().catch(console.error);
@@ -241,13 +295,13 @@ export default function App() {
       {/* 1. HEADER ATAS (Putih Bersih Monokrom - Lebar & Padding Standar Identik di Seluruh Layar) */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
         <div className="w-full max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
-          {/* Kiri: Hamburger Menu Garis Tiga atau Tombol Back jika di Checkout / Diskon */}
+          {/* Kiri: Hamburger Menu Garis Tiga atau Tombol Back jika di Sub-View */}
           <div className="flex items-center gap-2.5">
-            {activeView === 'checkout' || activeView === 'discounts' ? (
+            {activeView !== 'cashier' ? (
               <button
-                onClick={() => setActiveView('cashier')}
+                onClick={() => navigateBack()}
                 className="p-2 -ml-1 text-slate-800 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
-                title="Kembali ke Kasir"
+                title="Kembali"
               >
                 <ArrowLeft className="w-5 h-5 stroke-[2.2]" />
               </button>
@@ -519,3 +573,12 @@ export default function App() {
     </div>
   );
 }
+
+export default function App() {
+  return (
+    <NavigationProvider>
+      <AppContent />
+    </NavigationProvider>
+  );
+}
+
