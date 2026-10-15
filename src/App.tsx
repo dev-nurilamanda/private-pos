@@ -17,7 +17,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, seedDefaultWallets, seedDefaultProducts, type Product } from './db/db';
+import { db, seedDefaultWallets, seedDefaultProducts, seedDefaultDiscounts, type Product } from './db/db';
 import { type CartItem } from './db/transactionService';
 import { CashierCatalog } from './components/CashierCatalog';
 import { ManualCashier } from './components/ManualCashier';
@@ -27,11 +27,12 @@ import { CreateProductModal } from './components/CreateProductModal';
 import { DrawerMenu } from './components/DrawerMenu';
 import { WalletList } from './components/WalletList';
 import { ProductManagement } from './components/ProductManagement';
+import { DiscountManagement } from './components/DiscountManagement';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { formatRupiah } from './utils/formatters';
 
 export default function App() {
-  const [activeView, setActiveView] = useState<'cashier' | 'checkout' | 'wallets' | 'debts' | 'products'>('cashier');
+  const [activeView, setActiveView] = useState<'cashier' | 'checkout' | 'wallets' | 'debts' | 'products' | 'discounts'>('cashier');
   const [subTab, setSubTab] = useState<'katalog' | 'manual' | 'pesanan'>('katalog');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -60,6 +61,7 @@ export default function App() {
   useEffect(() => {
     seedDefaultWallets().catch(console.error);
     seedDefaultProducts().catch(console.error);
+    seedDefaultDiscounts().catch(console.error);
 
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -239,9 +241,9 @@ export default function App() {
       {/* 1. HEADER ATAS (Putih Bersih Monokrom - Lebar & Padding Standar Identik di Seluruh Layar) */}
       <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
         <div className="w-full max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
-          {/* Kiri: Hamburger Menu Garis Tiga atau Tombol Back jika di Checkout */}
+          {/* Kiri: Hamburger Menu Garis Tiga atau Tombol Back jika di Checkout / Diskon */}
           <div className="flex items-center gap-2.5">
-            {activeView === 'checkout' ? (
+            {activeView === 'checkout' || activeView === 'discounts' ? (
               <button
                 onClick={() => setActiveView('cashier')}
                 className="p-2 -ml-1 text-slate-800 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
@@ -267,6 +269,8 @@ export default function App() {
                 ? 'Dompet Modal'
                 : activeView === 'products'
                 ? 'Manajemen Produk'
+                : activeView === 'discounts'
+                ? 'Diskon & Promo'
                 : 'Riwayat & Piutang'}
             </h1>
           </div>
@@ -274,20 +278,15 @@ export default function App() {
           {/* Kanan: Action Buttons & Offline Indicator */}
           <div className="flex items-center gap-1.5">
             {activeView === 'checkout' && cart.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                  {cart.length} Produk • {totalCartQty} Unit
-                </span>
-                <button
-                  type="button"
-                  onClick={handleClearCart}
-                  className="text-xs font-semibold text-rose-600 hover:text-rose-700 active:scale-95 px-2.5 py-1 rounded-lg border border-rose-200 bg-rose-50 transition cursor-pointer flex items-center gap-1 shadow-2xs"
-                  title="Kosongkan Keranjang"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Kosongkan</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleClearCart}
+                className="text-xs font-semibold text-rose-600 hover:text-rose-700 active:scale-95 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                title="Kosongkan Keranjang"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Kosongkan</span>
+              </button>
             )}
 
             {activeView === 'products' && (
@@ -428,6 +427,7 @@ export default function App() {
             onClearCart={handleClearCart}
             onSuccess={handleCheckoutSuccess}
             onBackToCashier={() => setActiveView('cashier')}
+            onNavigateToDiscounts={() => setActiveView('discounts')}
           />
         ) : activeView === 'cashier' ? (
           <>
@@ -459,6 +459,8 @@ export default function App() {
           </>
         ) : activeView === 'products' ? (
           <ProductManagement onBackToCashier={() => setActiveView('cashier')} />
+        ) : activeView === 'discounts' ? (
+          <DiscountManagement onBackToCashier={() => setActiveView('cashier')} />
         ) : activeView === 'wallets' ? (
           <WalletList />
         ) : (
@@ -466,40 +468,33 @@ export default function App() {
         )}
       </main>
 
-      {/* 4. FLOATING BOTTOM CART BAR (Hanya di mode kasir saat ada item belanja) */}
+      {/* 4. FLOATING BOTTOM CART BAR (Sisi Kiri: Total Tagihan, Sisi Kanan: Kapsul Detail Pesanan) */}
       {activeView === 'cashier' && cart.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl animate-in slide-in-from-bottom duration-150">
           <div className="w-full max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-            {/* Kiri: Ringkasan Item & Total Bayar */}
+            {/* Sisi Kiri: Total Tagihan Simpel */}
             <div
               onClick={() => setActiveView('checkout')}
-              className="flex items-center gap-3 cursor-pointer min-w-0 flex-1"
+              className="cursor-pointer space-y-0.5 select-none min-w-0"
             >
-              <div className="relative w-11 h-11 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-xs shrink-0">
-                <ShoppingCart className="w-5 h-5 stroke-[2.2]" />
-                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[11px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-2xs">
-                  {totalCartQty}
-                </span>
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 truncate">
-                  <span>{cart.length} Produk ({totalCartQty} pcs)</span>
-                  <span>•</span>
-                  <span className="text-emerald-600 font-bold">Laba +{formatRupiah(totalCartProfit)}</span>
-                </div>
-                <div className="font-black text-slate-900 text-lg leading-tight tracking-tight">
-                  {formatRupiah(totalCartSelling)}
-                </div>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Total Tagihan
+              </span>
+              <div className="font-black text-slate-900 text-xl tracking-tight leading-tight truncate">
+                {formatRupiah(totalCartSelling)}
               </div>
             </div>
 
-            {/* Kanan: Tombol Bayar / Buka Keranjang */}
+            {/* Sisi Kanan: Kapsul Detail Pesanan dengan Ikon Bulat Jumlah Pesanan */}
             <button
+              type="button"
               onClick={() => setActiveView('checkout')}
-              className="px-5 py-3 bg-slate-900 hover:bg-black active:scale-95 text-white font-bold text-sm rounded-xl flex items-center gap-2 shadow-md transition cursor-pointer shrink-0"
+              className="h-12 pl-4 pr-3 bg-slate-900 hover:bg-black active:scale-95 text-white font-bold text-sm rounded-full flex items-center gap-2.5 shadow-md transition cursor-pointer select-none shrink-0"
             >
-              <span>Bayar</span>
-              <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+              <span>Detail Pesanan</span>
+              <span className="w-6 h-6 rounded-full bg-white text-slate-900 font-black text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                {totalCartQty}
+              </span>
             </button>
           </div>
         </div>

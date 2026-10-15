@@ -11,15 +11,16 @@ import {
   ShieldCheck,
   Smartphone,
   Share,
+  Tag,
 } from 'lucide-react';
-import { db, seedDefaultWallets, seedDefaultProducts } from '../db/db';
+import { db, seedDefaultWallets, seedDefaultProducts, seedDefaultDiscounts } from '../db/db';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface DrawerMenuProps {
   isOpen: boolean;
   onClose: () => void;
-  activeView: 'cashier' | 'checkout' | 'wallets' | 'debts' | 'products';
-  onSelectView: (view: 'cashier' | 'checkout' | 'wallets' | 'debts' | 'products') => void;
+  activeView: 'cashier' | 'checkout' | 'wallets' | 'debts' | 'products' | 'discounts';
+  onSelectView: (view: 'cashier' | 'checkout' | 'wallets' | 'debts' | 'products' | 'discounts') => void;
 }
 
 export const DrawerMenu: React.FC<DrawerMenuProps> = ({
@@ -49,6 +50,7 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
       const customers = await db.customers.toArray();
       const transactions = await db.transactions.toArray();
       const walletTransfers = await db.walletTransfers.toArray();
+      const discounts = await db.discounts.toArray();
 
       const backupData = {
         app: 'Private POS PWA',
@@ -59,6 +61,7 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
           customers,
           transactions,
           walletTransfers,
+          discounts,
         },
       };
 
@@ -68,7 +71,7 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `backup_kasir_mandiri_${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `backup_private_pos_${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -103,7 +106,7 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
 
           await db.transaction(
             'rw',
-            [db.wallets, db.products, db.customers, db.transactions, db.walletTransfers],
+            [db.wallets, db.products, db.customers, db.transactions, db.walletTransfers, db.discounts],
             async () => {
               if (parsed.data.wallets) {
                 await db.wallets.clear();
@@ -125,6 +128,10 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
                 await db.walletTransfers.clear();
                 await db.walletTransfers.bulkAdd(parsed.data.walletTransfers);
               }
+              if (parsed.data.discounts) {
+                await db.discounts.clear();
+                await db.discounts.bulkAdd(parsed.data.discounts);
+              }
             }
           );
 
@@ -144,14 +151,16 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
     if (!confirm('Yakin ingin mereset seluruh data kembali ke setelan bawaan?')) {
       return;
     }
-    await db.transaction('rw', [db.wallets, db.products, db.transactions, db.walletTransfers], async () => {
+    await db.transaction('rw', [db.wallets, db.products, db.transactions, db.walletTransfers, db.discounts], async () => {
       await db.wallets.clear();
       await db.products.clear();
       await db.transactions.clear();
       await db.walletTransfers.clear();
+      await db.discounts.clear();
     });
     await seedDefaultWallets();
     await seedDefaultProducts();
+    await seedDefaultDiscounts();
     alert('Database berhasil direset dengan data default bawaan!');
     onClose();
   };
@@ -264,6 +273,21 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
           >
             <Clock className="w-5 h-5 shrink-0" />
             <span className="text-sm font-bold">Riwayat & Piutang</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onSelectView('discounts');
+              onClose();
+            }}
+            className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl transition cursor-pointer active:scale-98 ${
+              activeView === 'discounts'
+                ? 'bg-slate-900 text-white shadow-2xs'
+                : 'text-slate-800 hover:bg-slate-100 active:bg-slate-100'
+            }`}
+          >
+            <Tag className="w-5 h-5 shrink-0" />
+            <span className="text-sm font-bold">Diskon & Promo</span>
           </button>
 
           <div className="pt-4 pb-1 border-t border-slate-100">

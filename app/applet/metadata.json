@@ -1,8 +1,0 @@
-{
-  "name": "Private POS",
-  "description": "Aplikasi Kasir POS & Pencatatan Inventaris Toko 100% Offline-First dengan Dexie.js IndexedDB",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}

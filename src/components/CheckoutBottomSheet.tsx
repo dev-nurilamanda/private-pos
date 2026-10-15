@@ -1,18 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   ArrowLeft,
-  CheckCircle2,
   AlertCircle,
-  CreditCard,
-  Banknote,
-  Clock,
   Trash2,
   Minus,
   Plus,
   ShoppingCart,
+  ChevronRight,
+  Tag,
+  Check,
+  Percent,
+  X,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/db';
+import { db, type Discount } from '../db/db';
 import { executeCartTransaction, type CartItem } from '../db/transactionService';
 import { formatRupiah } from '../utils/formatters';
 
@@ -23,6 +24,7 @@ export interface CheckoutBottomSheetProps {
   onClearCart: () => void;
   onSuccess: (summary: string) => void;
   onBackToCashier: () => void;
+  onNavigateToDiscounts?: () => void;
   isOpen?: boolean;
   onClose?: () => void;
 }
@@ -49,87 +51,92 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
   onClearCart,
   onSuccess,
   onBackToCashier,
+  onNavigateToDiscounts,
 }) => {
   const wallets = useLiveQuery(() => db.wallets.toArray(), []) || [];
-  const [paymentType, setPaymentType] = useState<'CASH' | 'QRIS' | 'TRANSFER' | 'UNPAID'>('CASH');
-  const [cashReceived, setCashReceived] = useState<number>(0);
-  const [inWalletId, setInWalletId] = useState('');
-  const [debtCustomerName, setDebtCustomerName] = useState('');
-  const [notes, setNotes] = useState('');
+  const discounts = useLiveQuery(() => db.discounts.toArray(), []) || [];
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Discount Selection State
+  const [selectedDiscount, setSelectedDiscount] = useState<Discount | null>(null);
+  const [isSelectingDiscount, setIsSelectingDiscount] = useState(false);
+
+  // Quick Create Discount State
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickName, setQuickName] = useState('');
+  const [quickType, setQuickType] = useState<'PERCENT' | 'FIXED'>('PERCENT');
+  const [quickValue, setQuickValue] = useState<number>(10);
+  const [quickMinPurchase, setQuickMinPurchase] = useState<number>(0);
+  const [quickError, setQuickError] = useState<string | null>(null);
+
+  const handleQuickAddDiscount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickName.trim()) {
+      setQuickError('Nama diskon wajib diisi.');
+      return;
+    }
+    if (quickValue <= 0) {
+      setQuickError('Nilai diskon harus lebih dari 0.');
+      return;
+    }
+    if (quickType === 'PERCENT' && quickValue > 100) {
+      setQuickError('Persentase maksimal 100%.');
+      return;
+    }
+
+    try {
+      const newId = await db.discounts.add({
+        name: quickName.trim(),
+        type: quickType,
+        value: quickValue,
+        minPurchase: quickMinPurchase > 0 ? quickMinPurchase : undefined,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      });
+      const added = await db.discounts.get(newId);
+      if (added) {
+        setSelectedDiscount(added);
+      }
+      setIsQuickAddOpen(false);
+      setQuickName('');
+      setQuickValue(10);
+      setQuickMinPurchase(0);
+      setQuickError(null);
+      setIsSelectingDiscount(false);
+    } catch (err) {
+      console.error(err);
+      setQuickError('Gagal menyimpan diskon.');
+    }
+  };
 
   // Perhitungan Keuangan Keranjang
   const totalItems = cart.length;
   const totalQty = cart.reduce((acc, item) => acc + item.quantity, 0);
-  const totalCost = cart.reduce((acc, item) => acc + item.costPrice * item.quantity, 0);
   const totalSelling = cart.reduce((acc, item) => acc + item.sellingPrice * item.quantity, 0);
-  const totalProfit = totalSelling - totalCost;
 
-  // Inisialisasi wallet penerima uang
-  useEffect(() => {
-    if (wallets.length > 0 && !inWalletId) {
-      const defaultIn = wallets.find((w) => w.category === 'CASH') || wallets[0];
-      if (defaultIn) setInWalletId(defaultIn.id);
+  // Kalkulasi Diskon Terpilih
+  let discountAmount = 0;
+  if (selectedDiscount) {
+    if (selectedDiscount.type === 'PERCENT') {
+      discountAmount = Math.round((totalSelling * selectedDiscount.value) / 100);
+    } else {
+      discountAmount = selectedDiscount.value;
     }
-  }, [wallets, inWalletId]);
+  }
+  discountAmount = Math.min(totalSelling, discountAmount);
+  const finalTotal = Math.max(0, totalSelling - discountAmount);
 
-  // Set nilai awal uang diterima saat keranjang berubah
-  useEffect(() => {
-    setCashReceived(totalSelling);
-    setError(null);
-  }, [totalSelling]);
-
-  // Pilihan pecahan uang cepat
-  const quickCashOptions = () => {
-    const opts = new Set<number>();
-    opts.add(totalSelling); // Uang Pas
-
-    const denominations = [10000, 20000, 50000, 100000];
-    for (const d of denominations) {
-      if (d > totalSelling) {
-        opts.add(d);
-      } else {
-        const nextRound = Math.ceil(totalSelling / d) * d;
-        if (nextRound > totalSelling) opts.add(nextRound);
-      }
-    }
-    return Array.from(opts).sort((a, b) => a - b).slice(0, 5);
-  };
-
-  const change = Math.max(0, cashReceived - totalSelling);
-  const isUnderpaid = paymentType === 'CASH' && cashReceived < totalSelling;
-
-  // Eksekusi Transaksi Kasir
+  // Eksekusi Transaksi Kasir Langsung
   const handleExecute = async () => {
     if (cart.length === 0) {
       setError('Keranjang masih kosong.');
       return;
     }
 
-    if (paymentType === 'CASH' && isUnderpaid) {
-      setError('Nominal uang diterima kurang dari total tagihan.');
-      return;
-    }
-
-    if (paymentType === 'UNPAID' && !debtCustomerName.trim()) {
-      setError('Nama pelanggan yang berhutang wajib diisi.');
-      return;
-    }
-
-    let targetInWalletId = inWalletId;
-    if (paymentType === 'CASH') {
-      const cashWallet = wallets.find((w) => w.category === 'CASH') || wallets[0];
-      targetInWalletId = cashWallet?.id || 'cash_main';
-    } else if (paymentType === 'QRIS' || paymentType === 'TRANSFER') {
-      if (!targetInWalletId) {
-        const digitalWallet = wallets.find((w) => w.category === 'EWALLET' || w.category === 'BANK') || wallets[0];
-        targetInWalletId = digitalWallet?.id || 'qris_ewallet';
-      }
-    } else if (paymentType === 'UNPAID') {
-      const cashWallet = wallets.find((w) => w.category === 'CASH') || wallets[0];
-      targetInWalletId = cashWallet?.id || 'cash_main';
-    }
+    const cashWallet = wallets.find((w) => w.category === 'CASH') || wallets[0];
+    const targetInWalletId = cashWallet?.id || 'cash_main';
 
     setIsSubmitting(true);
     setError(null);
@@ -138,17 +145,12 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
       await executeCartTransaction({
         items: cart,
         inWalletId: targetInWalletId,
-        paymentStatus: paymentType === 'UNPAID' ? 'UNPAID' : 'PAID',
-        paymentMethod: paymentType === 'UNPAID' ? 'HUTANG' : paymentType,
-        customerTarget: paymentType === 'UNPAID' ? debtCustomerName.trim() : undefined,
-        cashReceived: paymentType === 'CASH' ? cashReceived : undefined,
-        notes: notes.trim() || undefined,
+        paymentStatus: 'PAID',
+        paymentMethod: 'CASH',
+        cashReceived: finalTotal,
       });
 
-      const summaryText =
-        paymentType === 'UNPAID'
-          ? `Piutang ${totalQty} item (${debtCustomerName}) berhasil dicatat`
-          : `Pembayaran ${totalQty} item (${formatRupiah(totalSelling)}) berhasil`;
+      const summaryText = `Transaksi ${totalQty} item (${formatRupiah(finalTotal)}) berhasil disimpan`;
 
       onSuccess(summaryText);
       onClearCart();
@@ -162,7 +164,324 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
     }
   };
 
-  // Tampilan jika keranjang kosong
+  // TAMPILAN 1: HALAMAN PILIH DISKON (Saat baris diskon ditekan)
+  if (isSelectingDiscount) {
+    const activeDiscounts = discounts.filter((d) => d.isActive);
+
+    return (
+      <div className="-mx-4 pb-20">
+        {/* Header Pilih Diskon */}
+        <div className="px-4 py-3.5 bg-white border-b border-slate-200 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsSelectingDiscount(false)}
+              className="p-1.5 -ml-1 text-slate-700 hover:text-black active:bg-slate-100 rounded-lg transition cursor-pointer"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h2 className="text-base font-extrabold text-slate-900">Pilih Diskon</h2>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setQuickName('');
+                setQuickValue(10);
+                setQuickType('PERCENT');
+                setQuickMinPurchase(0);
+                setQuickError(null);
+                setIsQuickAddOpen(true);
+              }}
+              className="px-3 py-1.5 bg-slate-900 hover:bg-black active:scale-95 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1 shadow-2xs"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Tambah</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Subtotal Info Bar */}
+        <div className="px-4 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs text-slate-500 font-semibold">
+          <span>Subtotal Pesanan:</span>
+          <span className="font-bold text-slate-900">{formatRupiah(totalSelling)}</span>
+        </div>
+
+        {/* List Diskon Tersedia */}
+        <div className="bg-white divide-y divide-slate-100 border-b border-slate-200">
+          {/* Pilihan: Tanpa Diskon */}
+          <div
+            onClick={() => {
+              setSelectedDiscount(null);
+              setIsSelectingDiscount(false);
+            }}
+            className={`px-4 py-3.5 flex items-center justify-between cursor-pointer transition active:bg-slate-100 ${
+              !selectedDiscount ? 'bg-slate-50/80 font-bold' : 'hover:bg-slate-50'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 flex items-center justify-center">
+                <X className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-sm font-semibold text-slate-800">Tanpa Diskon</span>
+                <p className="text-xs text-slate-400">Tidak menggunakan potongan harga</p>
+              </div>
+            </div>
+            {!selectedDiscount && (
+              <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center">
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+              </div>
+            )}
+          </div>
+
+          {/* List Diskon dari Database */}
+          {activeDiscounts.length === 0 ? (
+            <div className="py-16 text-center text-slate-400 text-sm space-y-3 px-4">
+              <p>Belum ada diskon aktif.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setQuickName('');
+                  setQuickValue(10);
+                  setQuickType('PERCENT');
+                  setQuickMinPurchase(0);
+                  setQuickError(null);
+                  setIsQuickAddOpen(true);
+                }}
+                className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-xl active:scale-95 transition"
+              >
+                + Buat Diskon Baru Sekarang
+              </button>
+            </div>
+          ) : (
+            activeDiscounts.map((d) => {
+              const isSelected = selectedDiscount?.id === d.id;
+              const isEligible = !d.minPurchase || totalSelling >= d.minPurchase;
+              const calculatedCut =
+                d.type === 'PERCENT'
+                  ? Math.round((totalSelling * d.value) / 100)
+                  : d.value;
+
+              return (
+                <div
+                  key={d.id}
+                  onClick={() => {
+                    if (!isEligible) return;
+                    setSelectedDiscount(d);
+                    setIsSelectingDiscount(false);
+                  }}
+                  className={`px-4 py-4 flex items-center justify-between transition cursor-pointer ${
+                    !isEligible
+                      ? 'opacity-40 cursor-not-allowed bg-slate-50/50'
+                      : isSelected
+                      ? 'bg-slate-50 hover:bg-slate-100'
+                      : 'hover:bg-slate-50/80 active:bg-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5 min-w-0 pr-2">
+                    <div
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 font-extrabold text-sm border ${
+                        d.type === 'PERCENT'
+                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                          : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      }`}
+                    >
+                      {d.type === 'PERCENT' ? `${d.value}%` : <Tag className="w-5 h-5" />}
+                    </div>
+
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                          {d.name}
+                        </h4>
+                        <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                          - {formatRupiah(calculatedCut)}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-slate-500">
+                        {d.type === 'PERCENT'
+                          ? `Potongan ${d.value}%`
+                          : `Potongan ${formatRupiah(d.value)}`}
+                        {d.minPurchase && d.minPurchase > 0 && (
+                          <span> • Min. Belanja {formatRupiah(d.minPurchase)}</span>
+                        )}
+                      </p>
+
+                      {!isEligible && d.minPurchase && (
+                        <p className="text-[11px] font-semibold text-rose-600">
+                          Belum memenuhi minimal belanja {formatRupiah(d.minPurchase)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {isSelected && (
+                    <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center shrink-0">
+                      <Check className="w-3.5 h-3.5 stroke-[3]" />
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Link Navigasi ke Modul Manajemen Diskon */}
+        {onNavigateToDiscounts && (
+          <div className="p-4 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setIsSelectingDiscount(false);
+                onNavigateToDiscounts();
+              }}
+              className="text-xs font-bold text-slate-600 hover:text-slate-900 underline underline-offset-4 cursor-pointer"
+            >
+              Buka Modul Manajemen Diskon Lengkap →
+            </button>
+          </div>
+        )}
+
+        {/* Modal Cepat Tambah Diskon (Nominal / %) */}
+        {isQuickAddOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-100">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-150">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="font-extrabold text-base text-slate-900">Tambah Diskon Baru</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsQuickAddOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-800 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleQuickAddDiscount} className="p-5 space-y-4">
+                {quickError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs font-semibold text-rose-700">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{quickError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Nama Diskon <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={quickName}
+                    onChange={(e) => setQuickName(e.target.value)}
+                    placeholder="Contoh: Diskon Karyawan / Promo Spesial"
+                    className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-3.5 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-slate-900"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Tipe Diskon <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickType('PERCENT');
+                        if (quickValue > 100) setQuickValue(10);
+                      }}
+                      className={`py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                        quickType === 'PERCENT'
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Percent className="w-4 h-4" />
+                      <span>Persentase (%)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setQuickType('FIXED')}
+                      className={`py-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                        quickType === 'FIXED'
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Tag className="w-4 h-4" />
+                      <span>Nominal (Rp)</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    {quickType === 'PERCENT' ? 'Besaran Diskon (%)' : 'Besaran Diskon (Rp)'}{' '}
+                    <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold text-sm">
+                      {quickType === 'PERCENT' ? '%' : 'Rp'}
+                    </span>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      max={quickType === 'PERCENT' ? 100 : undefined}
+                      value={quickValue || ''}
+                      onChange={(e) => setQuickValue(Number(e.target.value) || 0)}
+                      placeholder={quickType === 'PERCENT' ? '10' : '5000'}
+                      className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-3.5 text-sm font-extrabold text-slate-900 focus:outline-none focus:bg-white focus:border-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Minimal Pembelian (Opsional)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-2.5 text-slate-400 font-bold text-sm">
+                      Rp
+                    </span>
+                    <input
+                      type="number"
+                      value={quickMinPurchase || ''}
+                      onChange={(e) => setQuickMinPurchase(Number(e.target.value) || 0)}
+                      placeholder="0 (Tanpa Minimal)"
+                      className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsQuickAddOpen(false)}
+                    className="flex-1 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 bg-slate-900 hover:bg-black active:scale-95 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-xs"
+                  >
+                    Terapkan Diskon
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // TAMPILAN JIKA KERANJANG KOSONG
   if (cart.length === 0) {
     return (
       <div className="py-20 px-4 text-center space-y-4 max-w-lg mx-auto">
@@ -186,8 +505,9 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
     );
   }
 
+  // TAMPILAN UTAMA HALAMAN KERANJANG
   return (
-    <div className="-mx-4 pb-36">
+    <div className="-mx-4 pb-28">
       {/* Alert Error */}
       {error && (
         <div className="mx-4 mt-3 p-3.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2.5 text-xs font-semibold text-rose-700 animate-in fade-in duration-100">
@@ -196,18 +516,16 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
         </div>
       )}
 
-      {/* 1. DAFTAR ITEM DI DALAM KERANJANG (Langsung Flat List, Tanpa Container Box Pembungkus) */}
+      {/* 1. DAFTAR ITEM DI DALAM KERANJANG (Nama Lengkap Jelas Tanpa Terpotong & Tanpa Harga Samping Sampah) */}
       <div className="bg-white border-b border-slate-200">
         <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs font-bold text-slate-500 uppercase tracking-wider">
           <span>Item Terpilih ({totalItems})</span>
-          <span>Subtotal</span>
         </div>
 
         <div className="divide-y divide-slate-100">
           {cart.map((item) => {
             const isPhys = item.isPhysical;
             const isMaxStock = isPhys ? item.quantity >= item.stock : item.quantity >= 1;
-            const itemSubtotal = item.sellingPrice * item.quantity;
             const initials = getItemInitials(item.productName);
 
             return (
@@ -215,18 +533,21 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
                 key={item.id}
                 className="px-4 py-4 sm:py-5 flex items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors"
               >
-                {/* Kiri: Avatar & Nama & Info Produk */}
-                <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-2">
+                {/* Kiri: Avatar & Nama Lengkap Produk (Tanpa Terpotong) */}
+                <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-1.5">
                   <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 font-bold text-sm flex items-center justify-center shrink-0 tracking-wider shadow-2xs">
                     {initials}
                   </div>
 
-                  <div className="min-w-0 space-y-1">
-                    <h4 className="font-bold text-slate-900 text-base leading-snug truncate">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    {/* Nama Produk Terbaca Jelas Tanpa Terpotong */}
+                    <h4 className="font-bold text-slate-900 text-base leading-snug break-words">
                       {item.productName}
                     </h4>
+
+                    {/* Harga Satuan & Tag Server/Stok */}
                     <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500">
-                      <span className="font-bold text-slate-900">
+                      <span className="font-bold text-slate-900 text-sm">
                         {formatRupiah(item.sellingPrice)}
                       </span>
                       <span className="text-slate-300">•</span>
@@ -246,8 +567,8 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
                   </div>
                 </div>
 
-                {/* Tengah & Kanan: Stepper Qty, Subtotal & Tombol Hapus */}
-                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                {/* Kanan: Stepper Qty & Tombol Hapus */}
+                <div className="flex items-center gap-2.5 shrink-0 pl-1">
                   <div className="flex items-center bg-slate-100 border border-slate-200 rounded-xl p-0.5 shadow-2xs">
                     <button
                       type="button"
@@ -273,13 +594,6 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
                     </button>
                   </div>
 
-                  {/* Subtotal Item */}
-                  <div className="text-right min-w-[70px] sm:min-w-[90px]">
-                    <span className="font-black text-slate-900 text-sm sm:text-base">
-                      {formatRupiah(itemSubtotal)}
-                    </span>
-                  </div>
-
                   {/* Tombol Hapus */}
                   <button
                     type="button"
@@ -287,7 +601,7 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
                     className="p-2 text-slate-400 hover:text-rose-600 active:bg-rose-50 rounded-xl transition cursor-pointer"
                     title="Hapus Dari Keranjang"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-4.5 h-4.5" />
                   </button>
                 </div>
               </div>
@@ -296,224 +610,54 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
         </div>
       </div>
 
-      {/* 2. RINGKASAN BIAYA & LABA KOTOR (Flat Section, Tanpa Container Card) */}
-      <div className="bg-white border-b border-slate-200 px-4 py-4 space-y-3">
-        <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-          <span>Total Modal Terpotong</span>
-          <span className="font-bold text-slate-800">{formatRupiah(totalCost)}</span>
+      {/* 2. RINGKASAN BIAYA (Hanya 2 Baris Proposional: Subtotal & Diskon) */}
+      <div className="bg-white border-b border-slate-200 px-4 py-4 space-y-3.5">
+        {/* Baris 1: Subtotal di kiri, nilainya di kanan */}
+        <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
+          <span>Subtotal</span>
+          <span className="font-bold text-slate-900">{formatRupiah(totalSelling)}</span>
         </div>
 
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-slate-500 font-semibold">Estimasi Laba Bersih</span>
-          <span className="font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
-            +{formatRupiah(totalProfit)}
-          </span>
-        </div>
-
-        <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-slate-600 uppercase tracking-wide block">
-              Total Tagihan
-            </span>
-            <span className="text-[11px] text-slate-400">Termasuk seluruh item</span>
-          </div>
-          <span className="font-black text-2xl text-slate-900 tracking-tight">
-            {formatRupiah(totalSelling)}
-          </span>
-        </div>
-      </div>
-
-      {/* 3. PILIHAN METODE PEMBAYARAN (Flat Section, Tanpa Container Card) */}
-      <div className="bg-white border-b border-slate-200 px-4 py-4 space-y-4">
-        <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-          Metode Pembayaran
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          {/* Tunai */}
-          <button
-            type="button"
-            onClick={() => {
-              setPaymentType('CASH');
-              setCashReceived(totalSelling);
-            }}
-            className={`py-3 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 ${
-              paymentType === 'CASH'
-                ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Banknote className="w-5 h-5" />
-            <span className="font-bold text-xs">Tunai (Cash)</span>
-          </button>
-
-          {/* QRIS / Bank */}
-          <button
-            type="button"
-            onClick={() => setPaymentType('QRIS')}
-            className={`py-3 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 ${
-              paymentType === 'QRIS'
-                ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <CreditCard className="w-5 h-5" />
-            <span className="font-bold text-xs">QRIS / Bank</span>
-          </button>
-
-          {/* Piutang (Hutang) */}
-          <button
-            type="button"
-            onClick={() => setPaymentType('UNPAID')}
-            className={`py-3 px-2 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition cursor-pointer active:scale-95 ${
-              paymentType === 'UNPAID'
-                ? 'bg-slate-900 border-slate-900 text-white shadow-2xs'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <Clock className="w-5 h-5" />
-            <span className="font-bold text-xs">Piutang (Hutang)</span>
-          </button>
-        </div>
-
-        {/* Form Tunai */}
-        {paymentType === 'CASH' && (
-          <div className="space-y-3 pt-1 animate-in fade-in duration-100">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Uang Diterima Konsumen
-              </label>
-              <div className="relative">
-                <span className="absolute left-4 top-3 text-slate-400 font-bold text-sm">Rp</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={cashReceived || ''}
-                  onChange={(e) => setCashReceived(Number(e.target.value) || 0)}
-                  placeholder="0"
-                  className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl pl-12 pr-4 text-base font-extrabold text-slate-900 focus:outline-none focus:bg-white focus:border-slate-900 shadow-2xs"
-                />
-              </div>
-            </div>
-
-            {/* Quick Money Buttons */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {quickCashOptions().map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => setCashReceived(opt)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer border ${
-                    cashReceived === opt
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  {opt === totalSelling ? 'Uang Pas' : formatRupiah(opt)}
-                </button>
-              ))}
-            </div>
-
-            {/* Status Kembalian / Kurang */}
-            <div
-              className={`p-3 rounded-xl border flex items-center justify-between text-xs font-bold ${
-                isUnderpaid
-                  ? 'bg-rose-50 border-rose-200 text-rose-700'
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-              }`}
-            >
-              <span>{isUnderpaid ? 'Pembayaran Masih Kurang:' : 'Kembalian:'}</span>
-              <span className="text-sm font-black">
-                {isUnderpaid
-                  ? formatRupiah(totalSelling - cashReceived)
-                  : formatRupiah(change)}
+        {/* Baris 2: Diskon di kiri, icon panah di kanan (Klik untuk pilih diskon) */}
+        <div
+          onClick={() => setIsSelectingDiscount(true)}
+          className="flex items-center justify-between text-sm font-semibold text-slate-700 cursor-pointer hover:bg-slate-50 -mx-2 px-2 py-1.5 rounded-lg transition active:bg-slate-100"
+        >
+          <div className="flex items-center gap-2">
+            <span>Diskon</span>
+            {selectedDiscount && (
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 truncate max-w-[150px]">
+                {selectedDiscount.name}
               </span>
-            </div>
+            )}
           </div>
-        )}
 
-        {/* Form QRIS / Bank: Pilih Rekening Penerima */}
-        {paymentType === 'QRIS' && (
-          <div className="space-y-1.5 pt-1 animate-in fade-in duration-100">
-            <label className="block text-xs font-bold text-slate-700">
-              Rekening / Dompet Penerima
-            </label>
-            <select
-              value={inWalletId}
-              onChange={(e) => setInWalletId(e.target.value)}
-              className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl px-4 text-xs font-bold text-slate-800 focus:outline-none focus:bg-white focus:border-slate-900 shadow-2xs"
-            >
-              {wallets.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name} (Saldo: {formatRupiah(w.currentBalance)})
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center gap-1.5">
+            {discountAmount > 0 ? (
+              <span className="font-bold text-rose-600">
+                -{formatRupiah(discountAmount)}
+              </span>
+            ) : (
+              <span className="text-slate-400 font-medium text-xs">Pilih Diskon</span>
+            )}
+            <ChevronRight className="w-4 h-4 text-slate-400" />
           </div>
-        )}
-
-        {/* Form Piutang (Hutang): Nama Pelanggan */}
-        {paymentType === 'UNPAID' && (
-          <div className="space-y-2.5 pt-1 animate-in fade-in duration-100">
-            <label className="block text-xs font-bold text-slate-700">
-              Nama Pelanggan yang Berhutang <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              autoFocus
-              value={debtCustomerName}
-              onChange={(e) => setDebtCustomerName(e.target.value)}
-              placeholder="Ketik nama pelanggan atau nomor telepon..."
-              className="w-full h-12 bg-slate-50 border border-slate-300 rounded-xl px-4 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-slate-900 shadow-2xs placeholder:text-slate-400"
-            />
-            <p className="text-[11px] text-amber-700 bg-amber-50 px-3.5 py-2.5 rounded-xl border border-amber-200 leading-relaxed">
-              Pesanan ini akan dicatat sebagai <strong>Belum Bayar (UNPAID)</strong> dan otomatis masuk ke daftar Piutang Kasir.
-            </p>
-          </div>
-        )}
-
-        {/* Catatan Transaksi Opsional */}
-        <div className="pt-1">
-          <label className="block text-xs font-bold text-slate-600 mb-1.5">
-            Catatan Tambahan (Opsional)
-          </label>
-          <input
-            type="text"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Contoh: Titipan tetangga, nomor referensi..."
-            className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-4 text-xs font-medium text-slate-800 focus:outline-none focus:bg-white focus:border-slate-900 shadow-2xs"
-          />
         </div>
       </div>
 
-      {/* 4. FLOATING BOTTOM ACTION BAR: EKSEKUSI PEMBAYARAN */}
+      {/* 3. FLOATING BOTTOM ACTION BAR: EKSEKUSI PEMBAYARAN */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl">
         <div className="w-full max-w-4xl mx-auto px-4 py-3">
           <button
             type="button"
-            disabled={
-              isSubmitting ||
-              cart.length === 0 ||
-              (paymentType === 'CASH' && isUnderpaid) ||
-              (paymentType === 'UNPAID' && !debtCustomerName.trim())
-            }
+            disabled={isSubmitting || cart.length === 0}
             onClick={handleExecute}
             className="w-full h-14 bg-slate-900 hover:bg-black active:scale-[0.99] disabled:opacity-40 text-white font-extrabold rounded-2xl shadow-md text-base flex items-center justify-center gap-2.5 transition cursor-pointer"
           >
             {isSubmitting ? (
               <span>Memproses Transaksi...</span>
-            ) : paymentType === 'UNPAID' ? (
-              <span>Catat Sebagai Piutang • {formatRupiah(totalSelling)}</span>
-            ) : paymentType === 'CASH' ? (
-              isUnderpaid ? (
-                <span>Nominal Kurang {formatRupiah(totalSelling - cashReceived)}</span>
-              ) : (
-                <span>Bayar Tunai • Kembalian {formatRupiah(change)}</span>
-              )
             ) : (
-              <span>Bayar & Catat Transaksi • {formatRupiah(totalSelling)}</span>
+              <span>Selesaikan Transaksi • {formatRupiah(finalTotal)}</span>
             )}
           </button>
         </div>

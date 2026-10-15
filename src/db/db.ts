@@ -65,6 +65,18 @@ export interface WalletTransfer {
   notes?: string;
 }
 
+export type DiscountType = 'PERCENT' | 'FIXED';
+
+export interface Discount {
+  id?: number; // autoincrement (++id)
+  name: string;
+  type: DiscountType; // 'PERCENT' | 'FIXED'
+  value: number; // e.g. 5 for 5%, 2000 for Rp 2.000
+  minPurchase?: number;
+  isActive: boolean;
+  createdAt?: string;
+}
+
 // --- DEXIE DATABASE CLASS ---
 
 export class PrivatePOSDatabase extends Dexie {
@@ -73,6 +85,7 @@ export class PrivatePOSDatabase extends Dexie {
   products!: EntityTable<Product, 'id'>;
   transactions!: EntityTable<Transaction, 'id'>;
   walletTransfers!: EntityTable<WalletTransfer, 'id'>;
+  discounts!: EntityTable<Discount, 'id'>;
 
   constructor() {
     super('PrivatePOSDB');
@@ -116,6 +129,10 @@ export class PrivatePOSDatabase extends Dexie {
           });
         }
       }
+    });
+
+    this.version(3).stores({
+      discounts: '++id, name, type, value, isActive',
     });
   }
 }
@@ -440,6 +457,48 @@ export async function seedDefaultWallets(): Promise<boolean> {
       });
     }
 
+    return false;
+  });
+}
+
+export const DEFAULT_DISCOUNTS: Discount[] = [
+  {
+    name: 'Diskon Member Setia',
+    type: 'PERCENT',
+    value: 5,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'Potongan Khusus',
+    type: 'FIXED',
+    value: 2000,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'Promo Spesial 10%',
+    type: 'PERCENT',
+    value: 10,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  },
+  {
+    name: 'Voucher Toko Rp 5.000',
+    type: 'FIXED',
+    value: 5000,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+  },
+];
+
+export async function seedDefaultDiscounts(): Promise<boolean> {
+  return await db.transaction('rw', db.discounts, async () => {
+    const count = await db.discounts.count();
+    if (count === 0) {
+      await db.discounts.bulkAdd(DEFAULT_DISCOUNTS);
+      return true;
+    }
     return false;
   });
 }
