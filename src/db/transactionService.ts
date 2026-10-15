@@ -148,6 +148,9 @@ export interface CartCheckoutPayload {
   customerTarget?: string; // Nama pembeli/pengutang
   cashReceived?: number;
   notes?: string;
+  discountAmount?: number;
+  discountName?: string;
+  finalTotal?: number;
 }
 
 /**
@@ -187,6 +190,14 @@ export async function executeCartTransaction(
         }
       }
 
+      // Catatan transaksi dengan info diskon jika ada
+      const discountNote = payload.discountAmount && payload.discountAmount > 0
+        ? `[Diskon: ${payload.discountName || 'Potongan'} -Rp ${payload.discountAmount.toLocaleString('id-ID')}]`
+        : '';
+      const notesCombined = [payload.notes?.trim(), discountNote, payload.items.length > 1 ? `Pesanan ${batchId}` : '']
+        .filter(Boolean)
+        .join(' ');
+
       const txnId = `TRX-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
       const record: Transaction = {
         id: txnId,
@@ -202,11 +213,7 @@ export async function executeCartTransaction(
         inWalletId: payload.inWalletId,
         paymentStatus: payload.paymentStatus,
         paymentMethod: payload.paymentMethod,
-        notes: payload.notes?.trim()
-          ? `${payload.notes} (${batchId})`
-          : payload.items.length > 1
-          ? `Pesanan ${batchId}`
-          : undefined,
+        notes: notesCombined || undefined,
         quantity: qty,
       };
 
@@ -226,11 +233,13 @@ export async function executeCartTransaction(
     }
 
     // 2. Tambah saldo penerima (inWalletId) jika status lunas (PAID)
+    // Gunakan finalTotal (setelah diskon) jika disediakan
+    const actualReceivedAmount = payload.finalTotal !== undefined ? payload.finalTotal : totalSellingAll;
     if (payload.paymentStatus === 'PAID') {
       const inWallet = await db.wallets.get(payload.inWalletId);
       if (inWallet) {
         await db.wallets.update(payload.inWalletId, {
-          currentBalance: inWallet.currentBalance + totalSellingAll,
+          currentBalance: inWallet.currentBalance + actualReceivedAmount,
           updatedAt: new Date().toISOString(),
         });
       }

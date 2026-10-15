@@ -17,6 +17,7 @@ import { db, type Discount } from '../db/db';
 import { executeCartTransaction, type CartItem } from '../db/transactionService';
 import { formatRupiah } from '../utils/formatters';
 import { useBackHandler } from '../context/NavigationContext';
+import { PaymentScreen } from './PaymentScreen';
 
 export interface CheckoutBottomSheetProps {
   cart: CartItem[];
@@ -59,6 +60,9 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Full Screen Payment State
+  const [isSelectingPayment, setIsSelectingPayment] = useState(false);
 
   // Discount Selection State
   const [selectedDiscount, setSelectedDiscount] = useState<Discount | null>(null);
@@ -174,6 +178,24 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  // TAMPILAN 0: FULL LAYAR FITUR PEMBAYARAN (Saat tombol "Pilih Pembayaran" ditekan)
+  if (isSelectingPayment) {
+    return (
+      <PaymentScreen
+        cart={cart}
+        totalSelling={totalSelling}
+        discountAmount={discountAmount}
+        selectedDiscount={selectedDiscount}
+        finalTotal={finalTotal}
+        wallets={wallets}
+        onBack={() => setIsSelectingPayment(false)}
+        onSuccess={onSuccess}
+        onClearCart={onClearCart}
+        onBackToCashier={onBackToCashier}
+      />
+    );
+  }
 
   // TAMPILAN 1: HALAMAN PILIH DISKON (Saat baris diskon ditekan)
   if (isSelectingDiscount) {
@@ -656,20 +678,17 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
         </div>
       </div>
 
-      {/* 3. FLOATING BOTTOM ACTION BAR: EKSEKUSI PEMBAYARAN */}
+      {/* 3. FLOATING BOTTOM ACTION BAR: PILIH PEMBAYARAN */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl">
         <div className="w-full max-w-4xl mx-auto px-4 py-3">
           <button
             type="button"
-            disabled={isSubmitting || cart.length === 0}
-            onClick={handleExecute}
-            className="w-full h-14 bg-slate-900 hover:bg-black active:scale-[0.99] disabled:opacity-40 text-white font-extrabold rounded-2xl shadow-md text-base flex items-center justify-center gap-2.5 transition cursor-pointer"
+            disabled={cart.length === 0}
+            onClick={() => setIsSelectingPayment(true)}
+            className="w-full h-14 bg-slate-900 hover:bg-black active:scale-[0.99] disabled:opacity-40 text-white font-extrabold rounded-2xl shadow-md text-base flex items-center justify-center gap-2 transition cursor-pointer"
           >
-            {isSubmitting ? (
-              <span>Memproses Transaksi...</span>
-            ) : (
-              <span>Selesaikan Transaksi • {formatRupiah(finalTotal)}</span>
-            )}
+            <span>Pilih Pembayaran • {formatRupiah(finalTotal)}</span>
+            <ChevronRight className="w-5 h-5 stroke-[2.5]" />
           </button>
         </div>
       </div>
