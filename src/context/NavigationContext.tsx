@@ -14,7 +14,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Map of registered back handlers: { id, handler, priority }
   const handlersRef = useRef<Array<{ id: string; handler: BackHandler; priority: number }>>([]);
   const [showExitPrompt, setShowExitPrompt] = useState(false);
-  const exitTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const allowExitUntilRef = useRef<number>(0);
 
   // Register a back handler. Higher priority runs first.

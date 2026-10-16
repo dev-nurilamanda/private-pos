@@ -12,6 +12,7 @@ import {
   Smartphone,
   Share,
   Tag,
+  BarChart3,
 } from 'lucide-react';
 import { db, seedDefaultWallets, seedDefaultProducts, seedDefaultDiscounts } from '../db/db';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -19,8 +20,8 @@ import { usePWAInstall } from '../hooks/usePWAInstall';
 interface DrawerMenuProps {
   isOpen: boolean;
   onClose: () => void;
-  activeView: 'cashier' | 'checkout' | 'wallets' | 'debts' | 'products' | 'discounts';
-  onSelectView: (view: 'cashier' | 'checkout' | 'wallets' | 'debts' | 'products' | 'discounts') => void;
+  activeView: 'cashier' | 'checkout' | 'wallets' | 'debts' | 'products' | 'discounts' | 'reports';
+  onSelectView: (view: 'cashier' | 'checkout' | 'wallets' | 'debts' | 'products' | 'discounts' | 'reports') => void;
 }
 
 export const DrawerMenu: React.FC<DrawerMenuProps> = ({
@@ -288,6 +289,21 @@ export const DrawerMenu: React.FC<DrawerMenuProps> = ({
           >
             <Tag className="w-5 h-5 shrink-0" />
             <span className="text-sm font-bold">Diskon & Promo</span>
+          </button>
+
+          <button
+            onClick={() => {
+              onSelectView('reports');
+              onClose();
+            }}
+            className={`w-full flex items-center gap-3.5 px-4 py-3.5 rounded-2xl transition cursor-pointer active:scale-98 ${
+              activeView === 'reports'
+                ? 'bg-slate-900 text-white shadow-2xs'
+                : 'text-slate-800 hover:bg-slate-100 active:bg-slate-100'
+            }`}
+          >
+            <BarChart3 className="w-5 h-5 shrink-0" />
+            <span className="text-sm font-bold">Laporan Penjualan</span>
           </button>
 
           <div className="pt-4 pb-1 border-t border-slate-100">

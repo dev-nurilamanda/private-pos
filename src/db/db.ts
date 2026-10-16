@@ -72,9 +72,40 @@ export interface Discount {
   name: string;
   type: DiscountType; // 'PERCENT' | 'FIXED'
   value: number; // e.g. 5 for 5%, 2000 for Rp 2.000
-  minPurchase?: number;
+  minPurchase?: number; // Minimal total belanja dalam Rp
+  dailyLimit?: number; // Limit pemakaian harian (misal: 10 kali/hari), undefined = tanpa limit
+  usedToday?: number; // Jumlah yang sudah terpakai hari ini
+  lastUsedDate?: string; // Tanggal pemakaian terakhir (YYYY-MM-DD) untuk auto-reset harian
+  maxQtyPerItem?: number; // Maksimal unit per transaksi yang mendapat diskon (undefined = seluruh unit)
   isActive: boolean;
   createdAt?: string;
+}
+
+/**
+ * Status kuota harian diskon dengan auto-reset jika tanggal berganti
+ */
+export function getDiscountDailyStatus(discount: Discount): {
+  usedToday: number;
+  remainingToday: number | null; // null jika tanpa limit
+  isLimitReached: boolean;
+} {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const usedToday = discount.lastUsedDate === todayStr ? (discount.usedToday || 0) : 0;
+
+  if (discount.dailyLimit && discount.dailyLimit > 0) {
+    const remaining = Math.max(0, discount.dailyLimit - usedToday);
+    return {
+      usedToday,
+      remainingToday: remaining,
+      isLimitReached: remaining <= 0,
+    };
+  }
+
+  return {
+    usedToday,
+    remainingToday: null,
+    isLimitReached: false,
+  };
 }
 
 // --- DEXIE DATABASE CLASS ---
@@ -133,6 +164,10 @@ export class PrivatePOSDatabase extends Dexie {
 
     this.version(3).stores({
       discounts: '++id, name, type, value, isActive',
+    });
+
+    this.version(4).stores({
+      discounts: '++id, name, type, value, isActive, lastUsedDate',
     });
   }
 }
@@ -463,23 +498,34 @@ export async function seedDefaultWallets(): Promise<boolean> {
 
 export const DEFAULT_DISCOUNTS: Discount[] = [
   {
-    name: 'Diskon Member Setia',
+    name: 'Diskon Member Setia 5%',
     type: 'PERCENT',
     value: 5,
+    dailyLimit: 20,
+    usedToday: 0,
+    lastUsedDate: new Date().toISOString().slice(0, 10),
     isActive: true,
     createdAt: new Date().toISOString(),
   },
   {
-    name: 'Potongan Khusus',
+    name: 'Potongan Khusus Rp 2.000',
     type: 'FIXED',
     value: 2000,
+    dailyLimit: 10,
+    usedToday: 0,
+    lastUsedDate: new Date().toISOString().slice(0, 10),
+    maxQtyPerItem: 1, // Maks 1 unit per transaksi
     isActive: true,
     createdAt: new Date().toISOString(),
   },
   {
-    name: 'Promo Spesial 10%',
+    name: 'Promo Flash 10%',
     type: 'PERCENT',
     value: 10,
+    minPurchase: 50000,
+    dailyLimit: 10,
+    usedToday: 0,
+    lastUsedDate: new Date().toISOString().slice(0, 10),
     isActive: true,
     createdAt: new Date().toISOString(),
   },
@@ -487,6 +533,10 @@ export const DEFAULT_DISCOUNTS: Discount[] = [
     name: 'Voucher Toko Rp 5.000',
     type: 'FIXED',
     value: 5000,
+    minPurchase: 75000,
+    dailyLimit: 5,
+    usedToday: 0,
+    lastUsedDate: new Date().toISOString().slice(0, 10),
     isActive: true,
     createdAt: new Date().toISOString(),
   },

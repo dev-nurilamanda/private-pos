@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   AlertCircle,
@@ -11,11 +11,14 @@ import {
   Check,
   Percent,
   X,
+  Clock,
+  Layers,
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, type Discount } from '../db/db';
+import { db, type Discount, getDiscountDailyStatus } from '../db/db';
 import { executeCartTransaction, type CartItem } from '../db/transactionService';
 import { formatRupiah } from '../utils/formatters';
+import { calculateDiscount } from '../utils/discountUtils';
 import { useBackHandler } from '../context/NavigationContext';
 import { PaymentScreen } from './PaymentScreen';
 
@@ -29,6 +32,7 @@ export interface CheckoutBottomSheetProps {
   onNavigateToDiscounts?: () => void;
   isOpen?: boolean;
   onClose?: () => void;
+  onPaymentModeChange?: (isPayment: boolean) => void;
 }
 
 function getItemInitials(name: string): string {
@@ -54,6 +58,7 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
   onSuccess,
   onBackToCashier,
   onNavigateToDiscounts,
+  onPaymentModeChange,
 }) => {
   const wallets = useLiveQuery(() => db.wallets.toArray(), []) || [];
   const discounts = useLiveQuery(() => db.discounts.toArray(), []) || [];
@@ -64,8 +69,20 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
   // Full Screen Payment State
   const [isSelectingPayment, setIsSelectingPayment] = useState(false);
 
-  // Discount Selection State
-  const [selectedDiscount, setSelectedDiscount] = useState<Discount | null>(null);
+  // Notifikasi ke induk (App.tsx) saat masuk atau keluar modul pembayaran
+  // agar header "Keranjang Belanja" dapat disembunyikan secara bersih
+  useEffect(() => {
+    onPaymentModeChange?.(isSelectingPayment);
+  }, [isSelectingPayment, onPaymentModeChange]);
+
+  useEffect(() => {
+    return () => {
+      onPaymentModeChange?.(false);
+    };
+  }, [onPaymentModeChange]);
+
+  // Discount Selection State (Live Synced by ID)
+  const [selectedDiscountId, setSelectedDiscountId] = useState<number | null>(null);
   const [isSelectingDiscount, setIsSelectingDiscount] = useState(false);
 
   // Quick Create Discount State
@@ -74,7 +91,15 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
   const [quickType, setQuickType] = useState<'PERCENT' | 'FIXED'>('PERCENT');
   const [quickValue, setQuickValue] = useState<number>(10);
   const [quickMinPurchase, setQuickMinPurchase] = useState<number>(0);
+  const [quickDailyLimit, setQuickDailyLimit] = useState<number>(0);
+  const [quickMaxQtyPerItem, setQuickMaxQtyPerItem] = useState<number>(0);
   const [quickError, setQuickError] = useState<string | null>(null);
+
+  // Live query sync: pastikan diskon terpilih selalu up-to-date dengan tabel Dexie
+  const selectedDiscount = useMemo(() => {
+    if (!selectedDiscountId) return null;
+    return discounts.find((d) => d.id === selectedDiscountId && d.isActive) || null;
+  }, [selectedDiscountId, discounts]);
 
   // Navigasi Bertingkat: Jika modal tambah diskon cepat terbuka, tutup modal dulu (priority 60)
   useBackHandler('checkout-quick-add', () => {
@@ -107,17 +132,20 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
         type: quickType,
         value: quickValue,
         minPurchase: quickMinPurchase > 0 ? quickMinPurchase : undefined,
+        dailyLimit: quickDailyLimit > 0 ? quickDailyLimit : undefined,
+        usedToday: 0,
+        lastUsedDate: new Date().toISOString().slice(0, 10),
+        maxQtyPerItem: quickMaxQtyPerItem > 0 ? quickMaxQtyPerItem : undefined,
         isActive: true,
         createdAt: new Date().toISOString(),
       });
-      const added = await db.discounts.get(newId);
-      if (added) {
-        setSelectedDiscount(added);
-      }
+      setSelectedDiscountId(newId || null);
       setIsQuickAddOpen(false);
       setQuickName('');
       setQuickValue(10);
       setQuickMinPurchase(0);
+      setQuickDailyLimit(0);
+      setQuickMaxQtyPerItem(0);
       setQuickError(null);
       setIsSelectingDiscount(false);
     } catch (err) {
@@ -131,16 +159,13 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
   const totalQty = cart.reduce((acc, item) => acc + item.quantity, 0);
   const totalSelling = cart.reduce((acc, item) => acc + item.sellingPrice * item.quantity, 0);
 
-  // Kalkulasi Diskon Terpilih
-  let discountAmount = 0;
-  if (selectedDiscount) {
-    if (selectedDiscount.type === 'PERCENT') {
-      discountAmount = Math.round((totalSelling * selectedDiscount.value) / 100);
-    } else {
-      discountAmount = selectedDiscount.value;
-    }
-  }
-  discountAmount = Math.min(totalSelling, discountAmount);
+  // Kalkulasi Diskon Terpilih yang Cerdas, Akurat & Sinkron
+  const discountCalculation = useMemo(() => {
+    if (!selectedDiscount) return { amount: 0, isValid: true };
+    return calculateDiscount(selectedDiscount, cart, totalSelling);
+  }, [selectedDiscount, cart, totalSelling]);
+
+  const discountAmount = discountCalculation.amount;
   const finalTotal = Math.max(0, totalSelling - discountAmount);
 
   // Eksekusi Transaksi Kasir Langsung
@@ -163,6 +188,10 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
         paymentStatus: 'PAID',
         paymentMethod: 'CASH',
         cashReceived: finalTotal,
+        discountId: selectedDiscount?.id,
+        discountAmount: discountAmount > 0 ? discountAmount : undefined,
+        discountName: selectedDiscount?.name,
+        finalTotal,
       });
 
       const summaryText = `Transaksi ${totalQty} item (${formatRupiah(finalTotal)}) berhasil disimpan`;
@@ -246,11 +275,11 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
           {/* Pilihan: Tanpa Diskon */}
           <div
             onClick={() => {
-              setSelectedDiscount(null);
+              setSelectedDiscountId(null);
               setIsSelectingDiscount(false);
             }}
             className={`px-4 py-3.5 flex items-center justify-between cursor-pointer transition active:bg-slate-100 ${
-              !selectedDiscount ? 'bg-slate-50/80 font-bold' : 'hover:bg-slate-50'
+              !selectedDiscountId ? 'bg-slate-50/80 font-bold' : 'hover:bg-slate-50'
             }`}
           >
             <div className="flex items-center gap-3">
@@ -262,7 +291,7 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
                 <p className="text-xs text-slate-400">Tidak menggunakan potongan harga</p>
               </div>
             </div>
-            {!selectedDiscount && (
+            {!selectedDiscountId && (
               <div className="w-6 h-6 rounded-full bg-slate-900 text-white flex items-center justify-center">
                 <Check className="w-3.5 h-3.5 stroke-[3]" />
               </div>
@@ -280,6 +309,8 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
                   setQuickValue(10);
                   setQuickType('PERCENT');
                   setQuickMinPurchase(0);
+                  setQuickDailyLimit(0);
+                  setQuickMaxQtyPerItem(0);
                   setQuickError(null);
                   setIsQuickAddOpen(true);
                 }}
@@ -290,19 +321,17 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
             </div>
           ) : (
             activeDiscounts.map((d) => {
-              const isSelected = selectedDiscount?.id === d.id;
-              const isEligible = !d.minPurchase || totalSelling >= d.minPurchase;
-              const calculatedCut =
-                d.type === 'PERCENT'
-                  ? Math.round((totalSelling * d.value) / 100)
-                  : d.value;
+              const isSelected = selectedDiscountId === d.id;
+              const calc = calculateDiscount(d, cart, totalSelling);
+              const dailyStatus = getDiscountDailyStatus(d);
+              const isEligible = calc.isValid;
 
               return (
                 <div
                   key={d.id}
                   onClick={() => {
                     if (!isEligible) return;
-                    setSelectedDiscount(d);
+                    setSelectedDiscountId(d.id || null);
                     setIsSelectingDiscount(false);
                   }}
                   className={`px-4 py-4 flex items-center justify-between transition cursor-pointer ${
@@ -313,25 +342,47 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
                       : 'hover:bg-slate-50/80 active:bg-slate-100'
                   }`}
                 >
-                  <div className="flex items-center gap-3.5 min-w-0 pr-2">
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 font-extrabold text-sm border ${
-                        d.type === 'PERCENT'
-                          ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                          : 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                      }`}
-                    >
-                      {d.type === 'PERCENT' ? `${d.value}%` : <Tag className="w-5 h-5" />}
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs bg-slate-100 text-slate-700">
+                      {d.type === 'PERCENT' ? `${d.value}%` : <Tag className="w-4 h-4 text-slate-600" />}
                     </div>
 
                     <div className="min-w-0 space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-slate-900 text-sm sm:text-base">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-semibold text-slate-900 text-sm">
                           {d.name}
                         </h4>
-                        <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                          - {formatRupiah(calculatedCut)}
-                        </span>
+                        {isEligible && calc.amount > 0 && (
+                          <span className="text-xs font-bold text-rose-600">
+                            -{formatRupiah(calc.amount)}
+                          </span>
+                        )}
+
+                        {/* Badge Kuota Harian */}
+                        {d.dailyLimit && d.dailyLimit > 0 && (
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${
+                              dailyStatus.isLimitReached
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                            }`}
+                          >
+                            <Clock className="w-2.5 h-2.5" />
+                            <span>
+                              {dailyStatus.isLimitReached
+                                ? `Habis (${dailyStatus.usedToday}/${d.dailyLimit})`
+                                : `Sisa ${dailyStatus.remainingToday}/${d.dailyLimit}x`}
+                            </span>
+                          </span>
+                        )}
+
+                        {/* Badge Limit Kuantitas Unit */}
+                        {d.maxQtyPerItem && d.maxQtyPerItem > 0 && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+                            <Layers className="w-2.5 h-2.5" />
+                            <span>Maks. {d.maxQtyPerItem} unit</span>
+                          </span>
+                        )}
                       </div>
 
                       <p className="text-xs text-slate-500">
@@ -343,9 +394,16 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
                         )}
                       </p>
 
-                      {!isEligible && d.minPurchase && (
-                        <p className="text-[11px] font-semibold text-rose-600">
-                          Belum memenuhi minimal belanja {formatRupiah(d.minPurchase)}
+                      {!isEligible && calc.reason && (
+                        <p className="text-[11px] font-semibold text-rose-600 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 shrink-0" />
+                          <span>{calc.reason}</span>
+                        </p>
+                      )}
+
+                      {isEligible && calc.unitLimitInfo && (
+                        <p className="text-[11px] font-medium text-indigo-600">
+                          {calc.unitLimitInfo}
                         </p>
                       )}
                     </div>
@@ -483,12 +541,49 @@ export const CheckoutBottomSheet: React.FC<CheckoutBottomSheetProps> = ({
                     </span>
                     <input
                       type="number"
+                      min="0"
                       value={quickMinPurchase || ''}
                       onChange={(e) => setQuickMinPurchase(Number(e.target.value) || 0)}
                       placeholder="0 (Tanpa Minimal)"
                       className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-slate-900"
                     />
                   </div>
+                </div>
+
+                {/* Batas Kuota Harian */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Batas Kuota Harian (Opsional)
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">Contoh: 10x/hari</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    value={quickDailyLimit || ''}
+                    onChange={(e) => setQuickDailyLimit(Number(e.target.value) || 0)}
+                    placeholder="0 (Tanpa Limit)"
+                    className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-3.5 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-slate-900"
+                  />
+                </div>
+
+                {/* Batas Kuantitas Unit */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-700">
+                      Maks. Unit Produk Terdiskon
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">Opsional per transaksi</span>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    value={quickMaxQtyPerItem || ''}
+                    onChange={(e) => setQuickMaxQtyPerItem(Number(e.target.value) || 0)}
+                    placeholder="0 (Semua unit)"
+                    className="w-full h-11 bg-slate-50 border border-slate-300 rounded-xl px-3.5 text-sm font-semibold text-slate-900 focus:outline-none focus:bg-white focus:border-slate-900"
+                  />
                 </div>
 
                 <div className="pt-2 flex items-center gap-2">

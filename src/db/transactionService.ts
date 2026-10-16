@@ -148,6 +148,7 @@ export interface CartCheckoutPayload {
   customerTarget?: string; // Nama pembeli/pengutang
   cashReceived?: number;
   notes?: string;
+  discountId?: number;
   discountAmount?: number;
   discountName?: string;
   finalTotal?: number;
@@ -167,7 +168,7 @@ export async function executeCartTransaction(
   const createdTransactions: Transaction[] = [];
   const batchId = `ORD-${Date.now().toString(36).toUpperCase()}`;
 
-  await db.transaction('rw', [db.wallets, db.products, db.transactions, db.customers], async () => {
+  await db.transaction('rw', [db.wallets, db.products, db.transactions, db.customers, db.discounts], async () => {
     const costPerWallet: Record<string, number> = {};
     let totalSellingAll = 0;
 
@@ -241,6 +242,19 @@ export async function executeCartTransaction(
         await db.wallets.update(payload.inWalletId, {
           currentBalance: inWallet.currentBalance + actualReceivedAmount,
           updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    // 3. Catat pemakaian kuota diskon jika ada
+    if (payload.discountId) {
+      const discountRecord = await db.discounts.get(payload.discountId);
+      if (discountRecord) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const currentUsed = discountRecord.lastUsedDate === todayStr ? (discountRecord.usedToday || 0) : 0;
+        await db.discounts.update(payload.discountId, {
+          usedToday: currentUsed + 1,
+          lastUsedDate: todayStr,
         });
       }
     }

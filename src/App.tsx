@@ -28,13 +28,14 @@ import { DrawerMenu } from './components/DrawerMenu';
 import { WalletList } from './components/WalletList';
 import { ProductManagement } from './components/ProductManagement';
 import { DiscountManagement } from './components/DiscountManagement';
+import { SalesReport } from './components/SalesReport';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { formatRupiah } from './utils/formatters';
 import { NavigationProvider, useNavigation, useBackHandler } from './context/NavigationContext';
 
 function AppContent() {
   const { navigateBack } = useNavigation();
-  const [activeView, setActiveView] = useState<'cashier' | 'checkout' | 'wallets' | 'debts' | 'products' | 'discounts'>('cashier');
+  const [activeView, setActiveView] = useState<'cashier' | 'checkout' | 'wallets' | 'debts' | 'products' | 'discounts' | 'reports'>('cashier');
   const [subTab, setSubTab] = useState<'katalog' | 'manual' | 'pesanan'>('katalog');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -42,6 +43,9 @@ function AppContent() {
 
   // Cart State (Keranjang Belanja POS)
   const [cart, setCart] = useState<CartItem[]>([]);
+
+  // State apakah sedang di dalam modul pembayaran full-screen
+  const [isPaymentMode, setIsPaymentMode] = useState(false);
 
   // Create Product Modal state
   const [isCreateProductOpen, setIsCreateProductOpen] = useState(false);
@@ -274,12 +278,24 @@ function AppContent() {
 
   // Handler Transaksi Selesai
   const handleCheckoutSuccess = (summary: string) => {
+    setIsPaymentMode(false);
     setSuccessToast(summary);
     setActiveView('cashier');
     setTimeout(() => {
       setSuccessToast(null);
     }, 3500);
   };
+
+  // Reset isPaymentMode jika berpindah dari view checkout
+  useEffect(() => {
+    if (activeView !== 'checkout') {
+      setIsPaymentMode(false);
+    }
+  }, [activeView]);
+
+  // Sembunyikan header keranjang belanja utama saat masuk ke modul pembayaran full-screen
+  // karena modul pembayaran (PaymentScreen) sudah memiliki header layarnya sendiri
+  const hideAppHeader = activeView === 'checkout' && isPaymentMode;
 
   // Total Finansial Keranjang untuk Floating Bar
   const totalCartQty = cart.reduce((sum, i) => sum + i.quantity, 0);
@@ -290,30 +306,31 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
       {/* PWA Install Notification Bar */}
-      <PWAInstallBanner />
+      {!hideAppHeader && <PWAInstallBanner />}
 
       {/* 1. HEADER ATAS (Putih Bersih Monokrom - Lebar & Padding Standar Identik di Seluruh Layar) */}
-      <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
-        <div className="w-full max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
-          {/* Kiri: Hamburger Menu Garis Tiga atau Tombol Back jika di Sub-View */}
-          <div className="flex items-center gap-2.5">
-            {activeView !== 'cashier' ? (
-              <button
-                onClick={() => navigateBack()}
-                className="p-2 -ml-1 text-slate-800 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
-                title="Kembali"
-              >
-                <ArrowLeft className="w-5 h-5 stroke-[2.2]" />
-              </button>
-            ) : (
-              <button
-                onClick={() => setIsDrawerOpen(true)}
-                className="p-2 -ml-1 text-slate-800 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
-                title="Menu Navigasi"
-              >
-                <Menu className="w-5 h-5 stroke-[2.2]" />
-              </button>
-            )}
+      {!hideAppHeader && (
+        <header className="sticky top-0 z-40 bg-white border-b border-slate-200">
+          <div className="w-full max-w-4xl mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
+            {/* Kiri: Hamburger Menu untuk setiap modul di menu hamburger, Tombol Back hanya untuk Keranjang Belanja (checkout) */}
+            <div className="flex items-center gap-2.5">
+              {activeView === 'checkout' ? (
+                <button
+                  onClick={() => navigateBack()}
+                  className="p-2 -ml-1 text-slate-800 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
+                  title="Kembali ke Kasir"
+                >
+                  <ArrowLeft className="w-5 h-5 stroke-[2.2]" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setIsDrawerOpen(true)}
+                  className="p-2 -ml-1 text-slate-800 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
+                  title="Menu Navigasi"
+                >
+                  <Menu className="w-5 h-5 stroke-[2.2]" />
+                </button>
+              )}
             <h1 className="font-extrabold text-lg tracking-tight text-slate-900">
               {activeView === 'cashier'
                 ? 'Kasir'
@@ -325,6 +342,8 @@ function AppContent() {
                 ? 'Manajemen Produk'
                 : activeView === 'discounts'
                 ? 'Diskon & Promo'
+                : activeView === 'reports'
+                ? 'Laporan Penjualan'
                 : 'Riwayat & Piutang'}
             </h1>
           </div>
@@ -462,6 +481,7 @@ function AppContent() {
           </div>
         )}
       </header>
+      )}
 
       {/* Floating Success Toast */}
       {successToast && (
@@ -480,8 +500,12 @@ function AppContent() {
             onRemoveItem={handleRemoveFromCart}
             onClearCart={handleClearCart}
             onSuccess={handleCheckoutSuccess}
-            onBackToCashier={() => setActiveView('cashier')}
+            onBackToCashier={() => {
+              setIsPaymentMode(false);
+              setActiveView('cashier');
+            }}
             onNavigateToDiscounts={() => setActiveView('discounts')}
+            onPaymentModeChange={setIsPaymentMode}
           />
         ) : activeView === 'cashier' ? (
           <>
@@ -517,6 +541,8 @@ function AppContent() {
           <DiscountManagement onBackToCashier={() => setActiveView('cashier')} />
         ) : activeView === 'wallets' ? (
           <WalletList />
+        ) : activeView === 'reports' ? (
+          <SalesReport />
         ) : (
           <OrdersAndDebts />
         )}
