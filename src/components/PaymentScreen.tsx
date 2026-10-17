@@ -4,19 +4,15 @@ import {
   Check,
   Coins,
   Building2,
-  CreditCard,
   Clock,
-  Wallet as WalletIcon,
   AlertCircle,
   CheckCircle2,
-  Server,
-  ChevronRight,
   Receipt,
-  Delete,
   Copy,
   ChevronDown,
   ChevronUp,
-  Share2,
+  Delete,
+  User,
 } from 'lucide-react';
 import { type Wallet, type Discount } from '../db/db';
 import { executeCartTransaction, type CartItem } from '../db/transactionService';
@@ -36,50 +32,61 @@ export interface PaymentScreenProps {
   onBackToCashier: () => void;
 }
 
-export type PaymentMethod = 'CASH' | 'TRANSFER' | 'QRIS' | 'HUTANG';
-export type PaymentStep = 'CHOOSE_METHOD' | 'PAY_CASH' | 'PAY_TRANSFER' | 'PAY_KASBON';
+export type PaymentTab = 'TUNAI' | 'TRANSFER' | 'KASBON';
 
-// Helper deteksi brand bank / e-wallet gaya fintech Indonesia
-function getWalletBrand(wallet: Wallet) {
+// Helper deteksi badge brand fintech / bank Indonesia
+function getWalletFintechBadge(wallet: Wallet) {
   const name = wallet.name.toUpperCase();
+
   if (name.includes('BCA')) {
-    return { name: 'Bank BCA', badge: 'BCA', bg: 'bg-[#003893]', text: 'text-white', border: 'border-[#003893]' };
+    return { badge: 'BCA', bg: 'bg-[#003893]', text: 'text-white', label: 'Bank BCA' };
   }
   if (name.includes('BRI')) {
-    return { name: 'Bank BRI', badge: 'BRI', bg: 'bg-[#00529C]', text: 'text-white', border: 'border-[#00529C]' };
+    return { badge: 'BRI', bg: 'bg-[#00529C]', text: 'text-white', label: 'Bank BRI' };
   }
   if (name.includes('MANDIRI')) {
-    return { name: 'Bank Mandiri', badge: 'MANDIRI', bg: 'bg-[#003366]', text: 'text-[#F5A623]', border: 'border-[#003366]' };
+    return { badge: 'MANDIRI', bg: 'bg-[#003366]', text: 'text-[#F5A623]', label: 'Bank Mandiri' };
   }
   if (name.includes('BNI')) {
-    return { name: 'Bank BNI', badge: 'BNI', bg: 'bg-[#005E6A]', text: 'text-[#F15A24]', border: 'border-[#005E6A]' };
+    return { badge: 'BNI', bg: 'bg-[#005E6A]', text: 'text-[#F15A24]', label: 'Bank BNI' };
+  }
+  if (name.includes('BSI')) {
+    return { badge: 'BSI', bg: 'bg-[#00A29E]', text: 'text-white', label: 'Bank BSI' };
   }
   if (name.includes('JAGO')) {
-    return { name: 'Bank Jago', badge: 'JAGO', bg: 'bg-[#FF5C00]', text: 'text-white', border: 'border-[#FF5C00]' };
+    return { badge: 'JAGO', bg: 'bg-[#FF5C00]', text: 'text-white', label: 'Bank Jago' };
+  }
+  if (name.includes('SEABANK') || name.includes('SEA BANK')) {
+    return { badge: 'SEA', bg: 'bg-[#FF5722]', text: 'text-white', label: 'SeaBank' };
   }
   if (name.includes('QRIS')) {
-    return { name: 'QRIS Digital', badge: 'QRIS', bg: 'bg-[#EA1D2C]', text: 'text-white', border: 'border-[#EA1D2C]' };
+    return { badge: 'QRIS', bg: 'bg-[#EA1D2C]', text: 'text-white', label: 'QRIS Standar' };
   }
   if (name.includes('DANA')) {
-    return { name: 'DANA E-Wallet', badge: 'DANA', bg: 'bg-[#118EEA]', text: 'text-white', border: 'border-[#118EEA]' };
+    return { badge: 'DANA', bg: 'bg-[#118EEA]', text: 'text-white', label: 'DANA' };
   }
-  if (name.includes('GOPAY')) {
-    return { name: 'GoPay', badge: 'GOPAY', bg: 'bg-[#00AED6]', text: 'text-white', border: 'border-[#00AED6]' };
+  if (name.includes('GOPAY') || name.includes('GO-PAY')) {
+    return { badge: 'GOPAY', bg: 'bg-[#00AED6]', text: 'text-white', label: 'GoPay' };
   }
   if (name.includes('OVO')) {
-    return { name: 'OVO', badge: 'OVO', bg: 'bg-[#4C3494]', text: 'text-white', border: 'border-[#4C3494]' };
+    return { badge: 'OVO', bg: 'bg-[#4C3494]', text: 'text-white', label: 'OVO' };
   }
+  if (name.includes('SHOPEEPAY') || name.includes('SHOPEE')) {
+    return { badge: 'SHOPEE', bg: 'bg-[#EE4D2D]', text: 'text-white', label: 'ShopeePay' };
+  }
+
   if (wallet.category === 'BANK') {
-    return { name: 'Transfer Bank', badge: 'BANK', bg: 'bg-blue-600', text: 'text-white', border: 'border-blue-600' };
+    return { badge: 'BANK', bg: 'bg-blue-600', text: 'text-white', label: 'Rekening Bank' };
   }
   if (wallet.category === 'EWALLET') {
-    return { name: 'E-Wallet / QRIS', badge: 'QRIS', bg: 'bg-emerald-600', text: 'text-white', border: 'border-emerald-600' };
+    return { badge: 'QRIS', bg: 'bg-emerald-600', text: 'text-white', label: 'E-Wallet' };
   }
-  return { name: 'Kasir Tunai', badge: 'KAS', bg: 'bg-slate-800', text: 'text-white', border: 'border-slate-800' };
+
+  return { badge: 'KAS', bg: 'bg-slate-800', text: 'text-white', label: 'Dompet Toko' };
 }
 
-// Helper evaluasi kalkulator matematika aman
-function evaluateCalculator(expr: string): number {
+// Helper evaluasi kalkulator matematika aman (angka, +, -)
+function evaluateCalculatorString(expr: string): number {
   try {
     const sanitized = expr.replace(/[^0-9+\-]/g, '');
     if (!sanitized) return 0;
@@ -116,78 +123,79 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
   onClearCart,
   onBackToCashier,
 }) => {
-  // Step Layar Pembayaran (Terpisah Bersih: Pilih Metode | Tunai | Transfer | Kasbon)
-  const [step, setStep] = useState<PaymentStep>('CHOOSE_METHOD');
-  const [transferFilter, setTransferFilter] = useState<'ALL' | 'BANK' | 'EWALLET'>('ALL');
-  const [isDetailExpanded, setIsDetailExpanded] = useState(false);
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  // 1. METODE PEMBAYARAN AKTIF: CHIP TABS HORIZONTAL (Tunai | Transfer | Kasbon)
+  const [activeTab, setActiveTab] = useState<PaymentTab>('TUNAI');
 
-  // Navigasi Bertingkat:
-  useBackHandler(
-    'payment-step-detail',
-    () => {
-      setStep('CHOOSE_METHOD');
-      setErrorMessage(null);
-    },
-    step !== 'CHOOSE_METHOD',
-    40
-  );
-
-  useBackHandler('checkout-payment-screen', onBack, step === 'CHOOSE_METHOD', 35);
-
-  // 1. Metode Pembayaran & Dompet Penerima
-  const [method, setMethod] = useState<PaymentMethod>('CASH');
-
+  // Dompet default
   const defaultCashWallet = wallets.find((w) => w.category === 'CASH') || wallets[0];
-  const defaultBankWallet = wallets.find((w) => w.category === 'BANK') || wallets[0];
-  const defaultQrisWallet = wallets.find((w) => w.category === 'EWALLET') || wallets[0];
+  const defaultBankWallet =
+    wallets.find((w) => w.category === 'BANK' || w.category === 'EWALLET') || wallets[0];
 
-  const [selectedInWalletId, setSelectedInWalletId] = useState<string>(
+  const [selectedWalletId, setSelectedWalletId] = useState<string>(
     defaultCashWallet?.id || 'cash_main'
   );
 
-  // Navigasi ke sub-layar
-  const handleGoToCash = () => {
-    setMethod('CASH');
-    if (defaultCashWallet) {
-      setSelectedInWalletId(defaultCashWallet.id);
-    }
-    setStep('PAY_CASH');
-    setErrorMessage(null);
-  };
-
-  const handleGoToTransfer = () => {
-    if (defaultBankWallet) {
-      setSelectedInWalletId(defaultBankWallet.id);
-      setMethod('TRANSFER');
-    } else if (defaultQrisWallet) {
-      setSelectedInWalletId(defaultQrisWallet.id);
-      setMethod('QRIS');
-    } else {
-      setMethod('TRANSFER');
-    }
-    setStep('PAY_TRANSFER');
-    setErrorMessage(null);
-  };
-
-  const handleGoToKasbon = () => {
-    setMethod('HUTANG');
-    if (defaultCashWallet) {
-      setSelectedInWalletId(defaultCashWallet.id);
-    }
-    setStep('PAY_KASBON');
-    setErrorMessage(null);
-  };
-
-  // 2. Kalkulator Fintech Numpad (Khusus Layar Tunai)
+  // 2. STATE LOGIKA KONTEN & KALKULATOR
   const [calcExpression, setCalcExpression] = useState<string>(String(finalTotal));
   const [cashReceived, setCashReceived] = useState<number>(finalTotal);
 
+  // Sinkronisasi saat finalTotal atau tab berubah
   useEffect(() => {
-    setCalcExpression(String(finalTotal));
-    setCashReceived(finalTotal);
-  }, [finalTotal]);
+    if (activeTab === 'TUNAI') {
+      setCalcExpression(String(finalTotal));
+      setCashReceived(finalTotal);
+      if (defaultCashWallet) setSelectedWalletId(defaultCashWallet.id);
+    } else if (activeTab === 'TRANSFER') {
+      setCalcExpression(String(finalTotal));
+      setCashReceived(finalTotal); // Terkunci PAS
+      if (defaultBankWallet) setSelectedWalletId(defaultBankWallet.id);
+    } else if (activeTab === 'KASBON') {
+      setCalcExpression('0');
+      setCashReceived(0);
+      if (defaultCashWallet) setSelectedWalletId(defaultCashWallet.id);
+    }
+  }, [activeTab, finalTotal]);
 
+  // Transfer & Kasbon info
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [tempoDays, setTempoDays] = useState<number>(7);
+  const [notes, setNotes] = useState('');
+  const [isAccordionOpen, setIsAccordionOpen] = useState(false);
+  const [copyToast, setCopyToast] = useState<string | null>(null);
+
+  // Submission & Struk
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successReceipt, setSuccessReceipt] = useState<{
+    totalPaid: number;
+    methodLabel: string;
+    inWalletName: string;
+    cashReceived?: number;
+    changeAmount?: number;
+    customerTarget?: string;
+    trxId: string;
+    dateStr: string;
+    deductedModal: { walletName: string; cost: number; remaining: number }[];
+  } | null>(null);
+
+  // Navigasi Bertingkat: Tombol Back
+  useBackHandler('checkout-payment-screen', onBack, !successReceipt, 35);
+  useBackHandler(
+    'payment-success-modal',
+    () => {
+      onClearCart();
+      onBackToCashier();
+    },
+    !!successReceipt,
+    50
+  );
+
+  // Status Kembalian Real-time
+  const changeAmount = Math.max(0, cashReceived - finalTotal);
+  const isCashInsufficient = activeTab === 'TUNAI' && cashReceived < finalTotal;
+
+  // Keypad Handlers dengan Logika Matematika
   const handleKeypadPress = (key: string) => {
     if (key === 'CLEAR') {
       setCalcExpression('0');
@@ -201,8 +209,20 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       return;
     }
 
+    if (key === '50000') {
+      setCalcExpression('50000');
+      setCashReceived(50000);
+      return;
+    }
+
+    if (key === '100000') {
+      setCalcExpression('100000');
+      setCashReceived(100000);
+      return;
+    }
+
     if (key === 'EQUAL') {
-      const evalVal = evaluateCalculator(calcExpression);
+      const evalVal = evaluateCalculatorString(calcExpression);
       setCalcExpression(String(evalVal));
       setCashReceived(evalVal);
       return;
@@ -221,7 +241,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         } else {
           nextStr = nextStr.slice(0, -1).trim();
         }
-        const evalVal = evaluateCalculator(nextStr);
+        const evalVal = evaluateCalculatorString(nextStr);
         setCashReceived(evalVal);
         return nextStr || '0';
       });
@@ -247,26 +267,14 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         if (lastPart === '+' || lastPart === '-' || lastPart === '0') return prev;
         parts[parts.length - 1] = `${lastPart}000`;
         const nextExpr = parts.join(' ');
-        const evalVal = evaluateCalculator(nextExpr);
+        const evalVal = evaluateCalculatorString(nextExpr);
         setCashReceived(evalVal);
         return nextExpr;
       });
       return;
     }
 
-    // Tambah pecahan cepat: +10rb, +20rb, +50rb, +100rb
-    if (key.startsWith('ADD_')) {
-      const addAmount = parseInt(key.replace('ADD_', ''), 10) || 0;
-      setCalcExpression((prev) => {
-        const currentVal = evaluateCalculator(prev);
-        const nextVal = currentVal + addAmount;
-        setCashReceived(nextVal);
-        return String(nextVal);
-      });
-      return;
-    }
-
-    // Digit angka 0 - 9
+    // Input digit angka (0-9)
     setCalcExpression((prev) => {
       let nextExpr = '';
       if (prev === '0') {
@@ -274,59 +282,23 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
       } else {
         nextExpr = `${prev}${key}`;
       }
-      const evalVal = evaluateCalculator(nextExpr);
+      const evalVal = evaluateCalculatorString(nextExpr);
       setCashReceived(evalVal);
       return nextExpr;
     });
   };
 
-  // 3. Info Pembeli & Kasbon
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [tempoDays, setTempoDays] = useState<number>(7);
-  const [notes, setNotes] = useState('');
-
-  // 4. Submission & Modal Struk Sukses
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [completedSuccessData, setCompletedSuccessData] = useState<{
-    inWalletName: string;
-    totalPaid: number;
-    cashReceived?: number;
-    changeAmount?: number;
-    method: PaymentMethod;
-    trxId: string;
-    dateStr: string;
-    deductedModal: { walletName: string; cost: number; remaining: number }[];
-  } | null>(null);
-
-  useBackHandler(
-    'payment-success-modal',
-    () => {
-      onClearCart();
-      onBackToCashier();
-    },
-    !!completedSuccessData,
-    50
-  );
-
-  const activeInWallet = wallets.find((w) => w.id === selectedInWalletId);
-  const changeAmount = Math.max(0, cashReceived - finalTotal);
-  const isCashInsufficient = method === 'CASH' && cashReceived < finalTotal;
+  // Salin Nomor Rekening
+  const handleCopyAccount = (textToCopy: string, bankLabel: string) => {
+    navigator.clipboard?.writeText(textToCopy);
+    setCopyToast(`${bankLabel} berhasil disalin!`);
+    setTimeout(() => setCopyToast(null), 2000);
+  };
 
   // Analisis Saldo Modal Server
   const modalAnalysis = useMemo(() => {
     const totalCostAll = cart.reduce((sum, item) => sum + item.costPrice * item.quantity, 0);
-    const estimatedProfit = finalTotal - totalCostAll;
-
-    const breakdownMap: Record<
-      string,
-      {
-        wallet: Wallet | undefined;
-        cost: number;
-        items: { name: string; qty: number; cost: number }[];
-      }
-    > = {};
+    const breakdownMap: Record<string, { wallet: Wallet | undefined; cost: number }> = {};
 
     cart.forEach((item) => {
       const wId = item.outWalletId || 'cash_main';
@@ -334,56 +306,37 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         breakdownMap[wId] = {
           wallet: wallets.find((w) => w.id === wId),
           cost: 0,
-          items: [],
         };
       }
-      const itemTotalCost = item.costPrice * item.quantity;
-      breakdownMap[wId].cost += itemTotalCost;
-      breakdownMap[wId].items.push({
-        name: item.productName,
-        qty: item.quantity,
-        cost: itemTotalCost,
-      });
+      breakdownMap[wId].cost += item.costPrice * item.quantity;
     });
 
     const breakdown = Object.entries(breakdownMap).map(([walletId, data]) => {
       const currentBalance = data.wallet ? data.wallet.currentBalance : 0;
-      const remainingBalance = currentBalance - data.cost;
-      const isBalanceLow = currentBalance < data.cost;
       return {
         walletId,
         walletName: data.wallet?.name || `Dompet (${walletId})`,
-        category: data.wallet?.category || 'SERVER',
-        currentBalance,
         cost: data.cost,
-        remainingBalance,
-        isBalanceLow,
-        items: data.items,
+        remainingBalance: currentBalance - data.cost,
       };
     });
 
-    return {
-      totalCostAll,
-      estimatedProfit,
-      breakdown,
-    };
-  }, [cart, finalTotal, wallets]);
+    return { totalCostAll, breakdown };
+  }, [cart, wallets]);
 
   // Eksekusi Konfirmasi Pembayaran
   const handleConfirmPayment = async () => {
     if (cart.length === 0) return;
 
-    if (method === 'CASH' && cashReceived < finalTotal) {
+    if (activeTab === 'TUNAI' && cashReceived < finalTotal) {
       setErrorMessage(
-        `Nominal uang diterima (${formatRupiah(cashReceived)}) masih kurang dari total tagihan (${formatRupiah(finalTotal)}).`
+        `Uang diterima (${formatRupiah(cashReceived)}) kurang dari tagihan (${formatRupiah(finalTotal)}).`
       );
       return;
     }
 
-    if (method === 'HUTANG' && !customerName.trim()) {
-      setErrorMessage(
-        'Untuk transaksi kasbon / hutang, Nama Pembeli wajib diisi.'
-      );
+    if (activeTab === 'KASBON' && !customerName.trim()) {
+      setErrorMessage('Untuk transaksi Kasbon, Nama Pelanggan wajib diisi.');
       return;
     }
 
@@ -391,21 +344,36 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
     setErrorMessage(null);
 
     try {
-      const inWalletId = selectedInWalletId || 'cash_main';
+      const inWalletId = selectedWalletId || 'cash_main';
       const targetCustomer = [customerName.trim(), customerPhone.trim()]
         .filter(Boolean)
         .join(' - ');
 
-      const tempoNote = method === 'HUTANG' ? `[Jatuh Tempo: ${tempoDays} hari]` : '';
+      const tempoNote = activeTab === 'KASBON' ? `[Jatuh Tempo: ${tempoDays} hari]` : '';
       const fullNotes = [notes.trim(), tempoNote].filter(Boolean).join(' ');
+
+      let paymentMethodCode = 'CASH';
+      let paymentStatusCode: 'PAID' | 'UNPAID' = 'PAID';
+
+      if (activeTab === 'TRANSFER') {
+        const w = wallets.find((wal) => wal.id === inWalletId);
+        paymentMethodCode = w?.category === 'EWALLET' ? 'QRIS' : 'TRANSFER';
+        paymentStatusCode = 'PAID';
+      } else if (activeTab === 'KASBON') {
+        paymentMethodCode = 'HUTANG';
+        paymentStatusCode = 'UNPAID';
+      } else {
+        paymentMethodCode = 'CASH';
+        paymentStatusCode = 'PAID';
+      }
 
       await executeCartTransaction({
         items: cart,
         inWalletId,
-        paymentStatus: method === 'HUTANG' ? 'UNPAID' : 'PAID',
-        paymentMethod: method,
+        paymentStatus: paymentStatusCode,
+        paymentMethod: paymentMethodCode,
         customerTarget: targetCustomer || undefined,
-        cashReceived: method === 'CASH' ? cashReceived : finalTotal,
+        cashReceived: activeTab === 'TUNAI' ? cashReceived : finalTotal,
         discountId: selectedDiscount?.id,
         discountAmount: discountAmount > 0 ? discountAmount : undefined,
         discountName: selectedDiscount?.name,
@@ -413,13 +381,7 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         notes: fullNotes || undefined,
       });
 
-      const deductedModalData = modalAnalysis.breakdown.map((b) => ({
-        walletName: b.walletName,
-        cost: b.cost,
-        remaining: b.remainingBalance,
-      }));
-
-      const randomTrx = `TRX-${Date.now().toString().slice(-6)}`;
+      const activeWalletObj = wallets.find((w) => w.id === inWalletId);
       const now = new Date();
       const dateStr = now.toLocaleDateString('id-ID', {
         day: 'numeric',
@@ -429,131 +391,98 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
         minute: '2-digit',
       });
 
-      setCompletedSuccessData({
-        inWalletName: activeInWallet?.name || 'Kasir Toko',
+      setSuccessReceipt({
         totalPaid: finalTotal,
-        cashReceived: method === 'CASH' ? cashReceived : undefined,
-        changeAmount: method === 'CASH' ? changeAmount : undefined,
-        method,
-        trxId: randomTrx,
+        methodLabel:
+          activeTab === 'TUNAI'
+            ? 'Tunai (Cash)'
+            : activeTab === 'TRANSFER'
+            ? `Transfer (${activeWalletObj?.name || 'Bank'})`
+            : 'Kasbon (Piutang)',
+        inWalletName: activeWalletObj?.name || 'Kasir',
+        cashReceived: activeTab === 'TUNAI' ? cashReceived : undefined,
+        changeAmount: activeTab === 'TUNAI' ? changeAmount : undefined,
+        customerTarget: targetCustomer || undefined,
+        trxId: `TRX-${Date.now().toString().slice(-6)}`,
         dateStr,
-        deductedModal: deductedModalData,
+        deductedModal: modalAnalysis.breakdown.map((b) => ({
+          walletName: b.walletName,
+          cost: b.cost,
+          remaining: b.remainingBalance,
+        })),
       });
     } catch (err: unknown) {
-      console.error('Payment processing error:', err);
-      const msg = err instanceof Error ? err.message : 'Gagal memproses pembayaran transaksi.';
+      console.error('Payment error:', err);
+      const msg = err instanceof Error ? err.message : 'Gagal memproses transaksi kasir.';
       setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard?.writeText(text);
-    setCopyFeedback(`${label} berhasil disalin`);
-    setTimeout(() => setCopyFeedback(null), 2500);
-  };
-
-  // ==========================================
-  // STRUK DIGITAL FINTECH SUKSES
-  // ==========================================
-  if (completedSuccessData) {
+  // =========================================================
+  // TAMPILAN STRUK DIGITAL SUKSES (FINTECH RECEIPT)
+  // =========================================================
+  if (successReceipt) {
     return (
       <div className="-mx-4 pb-28 min-h-screen bg-slate-50 flex flex-col justify-between animate-in fade-in duration-150">
         <div className="space-y-3">
-          {/* Header Kartu Struk Fintech */}
-          <div className="bg-white border-b border-slate-200/80 px-4 pt-9 pb-7 text-center space-y-3.5">
-            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 border border-emerald-200/80 rounded-full flex items-center justify-center mx-auto shadow-sm">
+          <div className="bg-white border-b border-slate-200/90 px-4 pt-9 pb-7 text-center space-y-3">
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-full flex items-center justify-center mx-auto shadow-xs">
               <CheckCircle2 className="w-9 h-9 stroke-[2.4]" />
             </div>
 
             <div className="space-y-1">
               <span className="text-xs font-bold uppercase tracking-widest text-emerald-600">
-                {completedSuccessData.method === 'HUTANG' ? 'Piutang Berhasil Dicatat' : 'Transaksi Berhasil'}
+                {activeTab === 'KASBON' ? 'Piutang Berhasil Dicatat' : 'Pembayaran Berhasil'}
               </span>
               <h2 className="text-3xl font-black text-slate-900 tracking-tight">
-                {formatRupiah(completedSuccessData.totalPaid)}
+                {formatRupiah(successReceipt.totalPaid)}
               </h2>
               <p className="text-xs text-slate-400">
-                {completedSuccessData.dateStr} • {completedSuccessData.trxId}
+                {successReceipt.dateStr} • {successReceipt.trxId}
               </p>
             </div>
           </div>
 
-          {/* Toast Salin Info */}
-          {copyFeedback && (
-            <div className="mx-4 p-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl text-center shadow-lg">
-              {copyFeedback}
-            </div>
-          )}
-
-          {/* Rincian Finansial Transaksi */}
-          <div className="bg-white border-y border-slate-200/80 px-4 py-4 space-y-3 text-xs">
+          <div className="bg-white border-y border-slate-200/90 px-4 py-4 space-y-2.5 text-xs text-slate-600 font-medium">
             <span className="font-bold uppercase tracking-wider text-slate-400 text-[11px] block">
-              Rincian Pembayaran
+              Rincian Transaksi
             </span>
 
-            <div className="space-y-2.5 text-slate-600 font-medium">
+            <div className="flex items-center justify-between">
+              <span>Metode</span>
+              <span className="font-bold text-slate-900">{successReceipt.methodLabel}</span>
+            </div>
+
+            {successReceipt.customerTarget && (
               <div className="flex items-center justify-between">
-                <span>Metode Pembayaran</span>
-                <span className="font-bold text-slate-900">
-                  {completedSuccessData.method === 'CASH'
-                    ? 'Uang Tunai (Cash)'
-                    : completedSuccessData.method === 'TRANSFER'
-                    ? 'Transfer Bank'
-                    : completedSuccessData.method === 'QRIS'
-                    ? 'QRIS & E-Wallet'
-                    : 'Kasbon / PayLater'}
-                </span>
+                <span>Pelanggan</span>
+                <span className="font-bold text-slate-900">{successReceipt.customerTarget}</span>
               </div>
+            )}
 
-              {completedSuccessData.method === 'CASH' && (
-                <>
-                  <div className="flex items-center justify-between">
-                    <span>Uang Diterima</span>
-                    <span className="font-bold text-slate-900">
-                      {formatRupiah(completedSuccessData.cashReceived || 0)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between pt-1 border-t border-slate-100 font-bold text-emerald-600">
-                    <span>Kembalian</span>
-                    <span className="text-sm font-black">
-                      {formatRupiah(completedSuccessData.changeAmount || 0)}
-                    </span>
-                  </div>
-                </>
-              )}
-
-              <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                <span>Tujuan Laci / Rekening</span>
-                <span className="font-bold text-slate-900">
-                  {completedSuccessData.inWalletName}
-                </span>
+            {successReceipt.cashReceived !== undefined && (
+              <div className="flex items-center justify-between">
+                <span>Uang Diterima</span>
+                <span className="font-bold text-slate-900">{formatRupiah(successReceipt.cashReceived)}</span>
               </div>
-            </div>
-          </div>
+            )}
 
-          {/* Rincian Pemotongan Modal Server */}
-          <div className="bg-white border-y border-slate-200/80 px-4 py-4 space-y-2.5 text-xs">
-            <span className="font-bold uppercase tracking-wider text-slate-400 text-[11px] block">
-              Pemotongan Saldo Modal Server
-            </span>
+            {successReceipt.changeAmount !== undefined && (
+              <div className="flex items-center justify-between text-emerald-600 font-bold border-t border-slate-100 pt-2">
+                <span>Kembalian</span>
+                <span className="text-sm font-black">{formatRupiah(successReceipt.changeAmount)}</span>
+              </div>
+            )}
 
-            <div className="divide-y divide-slate-100">
-              {completedSuccessData.deductedModal.map((dm, idx) => (
-                <div key={idx} className="py-2 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-slate-900 block">{dm.walletName}</span>
-                    <span className="text-slate-400 text-[11px]">Sisa: {formatRupiah(dm.remaining)}</span>
-                  </div>
-                  <span className="font-bold text-rose-600">-{formatRupiah(dm.cost)}</span>
-                </div>
-              ))}
+            <div className="flex items-center justify-between border-t border-slate-100 pt-2">
+              <span>Akun Penampung</span>
+              <span className="font-bold text-slate-900">{successReceipt.inWalletName}</span>
             </div>
           </div>
         </div>
 
-        {/* Floating Action Tombol Selesai */}
         <div className="p-4 bg-white border-t border-slate-200">
           <button
             type="button"
@@ -572,811 +501,600 @@ export const PaymentScreen: React.FC<PaymentScreenProps> = ({
     );
   }
 
-  // ==========================================
-  // ALUR PEMBAYARAN FINTECH (CLEAN & TERPISAH)
-  // ==========================================
+  // =========================================================
+  // ANTARMUKA CHECKOUT ULTRA-LEAN RESPONSIF MOBILE-NATIVE
+  // =========================================================
   return (
-    <div className="-mx-4 pb-32 bg-slate-50 min-h-screen">
-      {/* ========================================================= */}
-      {/* 1. LAYAR UTAMA: PILIH METODE (FINTECH CHECKOUT MENU)      */}
-      {/* ========================================================= */}
-      {step === 'CHOOSE_METHOD' && (
-        <div className="space-y-3">
-          {/* Header Fintech */}
-          <div className="sticky top-0 z-30 px-4 py-3.5 bg-white border-b border-slate-200 flex items-center justify-between gap-3 shadow-2xs">
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={onBack}
-                className="p-1.5 -ml-1 text-slate-700 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
-                title="Kembali ke Keranjang"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h1 className="text-base font-extrabold text-slate-900 leading-tight">
-                Metode Pembayaran
-              </h1>
-            </div>
-
-            <span className="text-xs text-slate-500 font-medium shrink-0">
-              {cart.length} item • {cart.reduce((a, b) => a + b.quantity, 0)} unit
-            </span>
-          </div>
-
-          {/* Error Alert */}
-          {errorMessage && (
-            <div className="mx-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2.5 text-xs font-semibold text-rose-700">
-              <AlertCircle className="w-4.5 h-4.5 text-rose-600 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* Hero Banner Tagihan ala Fintech */}
-          <div className="bg-white border-y border-slate-200/90 px-4 py-5 space-y-3">
-            <div className="flex items-baseline justify-between">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-                  Total Tagihan
-                </span>
-                <div className="text-3xl font-black text-slate-900 tracking-tight mt-0.5">
-                  {formatRupiah(finalTotal)}
-                </div>
-              </div>
-
-              {discountAmount > 0 && (
-                <div className="text-right">
-                  <span className="text-xs text-slate-400 line-through block">
-                    {formatRupiah(totalSelling)}
-                  </span>
-                  <span className="text-xs font-bold text-rose-600">
-                    Hemat {formatRupiah(discountAmount)}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Accordion Rincian Ringkas Tagihan */}
-            <div className="pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setIsDetailExpanded(!isDetailExpanded)}
-                className="w-full flex items-center justify-between text-xs font-bold text-slate-500 hover:text-slate-800 transition cursor-pointer py-0.5"
-              >
-                <span>Lihat Rincian Biaya</span>
-                {isDetailExpanded ? (
-                  <ChevronUp className="w-4 h-4 text-slate-400" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-slate-400" />
-                )}
-              </button>
-
-              {isDetailExpanded && (
-                <div className="pt-2.5 space-y-1.5 text-xs text-slate-600 animate-in fade-in duration-100">
-                  <div className="flex items-center justify-between">
-                    <span>Subtotal Barang ({cart.length} item)</span>
-                    <span className="font-semibold text-slate-900">{formatRupiah(totalSelling)}</span>
-                  </div>
-                  {discountAmount > 0 && (
-                    <div className="flex items-center justify-between text-rose-600 font-semibold">
-                      <span>Potongan Diskon ({selectedDiscount?.name || 'Promo'})</span>
-                      <span>-{formatRupiah(discountAmount)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1.5 border-t border-slate-100">
-                    <span>Total Saldo Modal Terpotong</span>
-                    <span>{formatRupiah(modalAnalysis.totalCostAll)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px] text-emerald-600 font-semibold">
-                    <span>Estimasi Laba Bersih</span>
-                    <span>+{formatRupiah(modalAnalysis.estimatedProfit)}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Daftar Kategori Metode Pembayaran Fintech */}
-          <div className="bg-white border-y border-slate-200/90">
-            <div className="px-4 py-3 bg-slate-50/70 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              Pilih Pembayaran
-            </div>
-
-            <div className="divide-y divide-slate-100">
-              {/* Opsi 1: Uang Tunai / Cash (Dilengkapi Numpad Kalkulator) */}
-              <div
-                onClick={handleGoToCash}
-                className="px-4 py-4.5 hover:bg-slate-50 active:bg-slate-100 transition cursor-pointer flex items-center justify-between gap-3 group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-500/20 flex items-center justify-center shrink-0">
-                    <Coins className="w-5 h-5 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-900 text-sm">Tunai (Cash)</h3>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
-                        Kalkulator POS
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">
-                      Hitung uang diterima konsumen & kembalian otomatis
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-800 transition shrink-0" />
-              </div>
-
-              {/* Opsi 2: Transfer Bank & E-Wallet / QRIS */}
-              <div
-                onClick={handleGoToTransfer}
-                className="px-4 py-4.5 hover:bg-slate-50 active:bg-slate-100 transition cursor-pointer flex items-center justify-between gap-3 group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 border border-blue-500/20 flex items-center justify-center shrink-0">
-                    <Building2 className="w-5 h-5 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-900 text-sm">Transfer Bank & E-Wallet</h3>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
-                        BCA, Mandiri, QRIS
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">
-                      Pilih rekening penerima atau QRIS digital kasir
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-800 transition shrink-0" />
-              </div>
-
-              {/* Opsi 3: Kasbon / PayLater (Tempo) */}
-              <div
-                onClick={handleGoToKasbon}
-                className="px-4 py-4.5 hover:bg-slate-50 active:bg-slate-100 transition cursor-pointer flex items-center justify-between gap-3 group"
-              >
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="w-11 h-11 rounded-2xl bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 flex items-center justify-center shrink-0">
-                    <Clock className="w-5 h-5 stroke-[2.2]" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-900 text-sm">Kasbon (PayLater Toko)</h3>
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        Tempo
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 truncate mt-0.5">
-                      Catat piutang dengan nama pembeli & tanggal jatuh tempo
-                    </p>
-                  </div>
-                </div>
-                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:text-slate-800 transition shrink-0" />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* 2. LAYAR TUNAI: KALKULATOR FINTECH NUMPAD                 */}
-      {/* ========================================================= */}
-      {step === 'PAY_CASH' && (
-        <div className="space-y-3">
-          {/* Header Tunai */}
-          <div className="sticky top-0 z-30 px-4 py-3.5 bg-white border-b border-slate-200 flex items-center justify-between gap-3 shadow-2xs">
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => setStep('CHOOSE_METHOD')}
-                className="p-1.5 -ml-1 text-slate-700 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
-                title="Ganti Metode"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-base font-extrabold text-slate-900 leading-tight">
-                  Pembayaran Tunai
-                </h1>
-                <p className="text-xs text-slate-500 font-medium">
-                  Tagihan: <strong className="text-slate-900 font-bold">{formatRupiah(finalTotal)}</strong>
-                </p>
-              </div>
-            </div>
-
+    <div className="-mx-4 bg-slate-50 min-h-[calc(100dvh-3.5rem)] flex flex-col justify-between">
+      {/* BAGIAN ATAS: NAVBAR, TABS, DAN KONTEN DINAMIS */}
+      <div className="flex-1 flex flex-col">
+        {/* 1. Header Minimalis: "Pilih pembayaran" */}
+        <div className="sticky top-0 z-30 px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={() => handleKeypadPress('UANG_PAS')}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-black text-white font-bold text-xs rounded-xl active:scale-95 transition cursor-pointer shadow-2xs"
+              onClick={onBack}
+              className="p-1.5 -ml-1 text-slate-700 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
+              title="Kembali"
             >
-              Uang Pas
+              <ArrowLeft className="w-5 h-5" />
             </button>
-          </div>
-
-          {/* Error Alert */}
-          {errorMessage && (
-            <div className="mx-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2.5 text-xs font-semibold text-rose-700">
-              <AlertCircle className="w-4.5 h-4.5 text-rose-600 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* Display Card Fintech: Uang Diterima & Kembalian Real-time */}
-          <div className="bg-white border-y border-slate-200/90 px-4 py-4 space-y-2.5">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Uang Diterima Konsumen
-              </span>
-              {cashReceived > 0 && (
-                <button
-                  type="button"
-                  onClick={() => handleKeypadPress('CLEAR')}
-                  className="text-xs font-bold text-rose-600 hover:text-rose-700 active:scale-95 cursor-pointer"
-                >
-                  Reset (C)
-                </button>
-              )}
-            </div>
-
-            {/* Ekspresi hitungan aktif */}
-            {(calcExpression.includes('+') || calcExpression.includes('-')) && (
-              <div className="text-xs font-bold text-slate-400 font-mono tracking-wide">
-                Hitungan: {calcExpression}
-              </div>
-            )}
-
-            {/* Nominal Besar Fintech */}
-            <div className="text-3xl font-black text-slate-900 tracking-tight flex items-baseline gap-1 select-none">
-              <span className="text-xl text-slate-400 font-bold">Rp</span>
-              <span>{cashReceived > 0 ? formatRupiah(cashReceived).replace('Rp', '').trim() : '0'}</span>
-            </div>
-
-            {/* Status Kembalian Banner */}
-            <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-semibold">
-                {isCashInsufficient ? 'Kekurangan Uang:' : 'Kembalian Kasir:'}
-              </span>
-              <div className="flex items-center gap-2">
-                <span
-                  className={
-                    isCashInsufficient ? 'text-rose-600 text-sm font-black' : 'text-emerald-600 text-base font-black'
-                  }
-                >
-                  {isCashInsufficient
-                    ? formatRupiah(finalTotal - cashReceived)
-                    : formatRupiah(changeAmount)}
-                </span>
-                {!isCashInsufficient && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-black border border-emerald-200">
-                    LUNAS
+            <div>
+              <h1 className="text-base font-extrabold text-slate-900 leading-tight">
+                Pilih pembayaran
+              </h1>
+              <p className="text-[11px] text-slate-500 font-medium">
+                Tagihan: <strong className="text-slate-900 font-bold">{formatRupiah(finalTotal)}</strong>
+                {discountAmount > 0 && (
+                  <span className="text-rose-600 font-semibold ml-1">
+                    (Diskon -{formatRupiah(discountAmount)})
                   </span>
                 )}
-              </div>
+              </p>
             </div>
           </div>
 
-          {/* Baris Tombol Pecahan Cepat Fintech */}
-          <div className="bg-white border-y border-slate-200/90 px-4 py-3">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('UANG_PAS')}
-                className="py-2 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 shrink-0 active:scale-95 transition cursor-pointer"
-              >
-                Pas ({formatRupiah(finalTotal)})
-              </button>
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('ADD_10000')}
-                className="py-2 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 shrink-0 active:scale-95 transition cursor-pointer"
-              >
-                +10rb
-              </button>
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('ADD_20000')}
-                className="py-2 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 shrink-0 active:scale-95 transition cursor-pointer"
-              >
-                +20rb
-              </button>
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('ADD_50000')}
-                className="py-2 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 shrink-0 active:scale-95 transition cursor-pointer"
-              >
-                +50rb
-              </button>
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('ADD_100000')}
-                className="py-2 px-3 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 shrink-0 active:scale-95 transition cursor-pointer"
-              >
-                +100rb
-              </button>
-            </div>
-          </div>
-
-          {/* FINTECH CALCULATOR NUMPAD (4 Kolom Ergonomis & Tactile) */}
-          <div className="bg-white border-y border-slate-200/90 px-4 py-4 select-none">
-            <div className="grid grid-cols-4 gap-2">
-              {/* Row 1: 1, 2, 3, + */}
-              {['1', '2', '3'].map((digit) => (
-                <button
-                  key={digit}
-                  type="button"
-                  onClick={() => handleKeypadPress(digit)}
-                  className="h-14 bg-white active:bg-slate-100 border border-slate-200/90 rounded-2xl font-bold text-2xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-2xs"
-                >
-                  {digit}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('+')}
-                className="h-14 bg-blue-50 active:bg-blue-100 border border-blue-200 rounded-2xl font-black text-2xl text-blue-700 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-2xs"
-                title="Tambah Uang"
-              >
-                +
-              </button>
-
-              {/* Row 2: 4, 5, 6, - */}
-              {['4', '5', '6'].map((digit) => (
-                <button
-                  key={digit}
-                  type="button"
-                  onClick={() => handleKeypadPress(digit)}
-                  className="h-14 bg-white active:bg-slate-100 border border-slate-200/90 rounded-2xl font-bold text-2xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-2xs"
-                >
-                  {digit}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('-')}
-                className="h-14 bg-blue-50 active:bg-blue-100 border border-blue-200 rounded-2xl font-black text-2xl text-blue-700 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-2xs"
-                title="Kurang Uang"
-              >
-                -
-              </button>
-
-              {/* Row 3: 7, 8, 9, Backspace */}
-              {['7', '8', '9'].map((digit) => (
-                <button
-                  key={digit}
-                  type="button"
-                  onClick={() => handleKeypadPress(digit)}
-                  className="h-14 bg-white active:bg-slate-100 border border-slate-200/90 rounded-2xl font-bold text-2xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-2xs"
-                >
-                  {digit}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('BACKSPACE')}
-                className="h-14 bg-slate-100 active:bg-slate-200 border border-slate-200/90 rounded-2xl font-bold text-slate-700 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-2xs"
-                title="Hapus Digit"
-              >
-                <Delete className="w-5 h-5" />
-              </button>
-
-              {/* Row 4: 000, 0, C (Reset), = (Hitung) */}
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('000')}
-                className="h-14 bg-white active:bg-slate-100 border border-slate-200/90 rounded-2xl font-bold text-base text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-2xs tracking-tight"
-              >
-                000
-              </button>
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('0')}
-                className="h-14 bg-white active:bg-slate-100 border border-slate-200/90 rounded-2xl font-bold text-2xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-2xs"
-              >
-                0
-              </button>
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('CLEAR')}
-                className="h-14 bg-rose-50 active:bg-rose-100 border border-rose-200 rounded-2xl font-black text-lg text-rose-600 active:scale-95 transition cursor-pointer flex items-center justify-center shadow-2xs"
-                title="Reset Total"
-              >
-                C
-              </button>
-              <button
-                type="button"
-                onClick={() => handleKeypadPress('EQUAL')}
-                className="h-14 bg-slate-900 active:bg-black rounded-2xl font-black text-2xl text-white active:scale-95 transition cursor-pointer flex items-center justify-center shadow-md"
-                title="Hitung Total"
-              >
-                =
-              </button>
-            </div>
-          </div>
-
-          {/* Laci Kasir & Catatan Transaksi */}
-          <div className="bg-white border-y border-slate-200/90 px-4 py-4 space-y-2.5">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
-              <span>Masuk ke Laci:</span>
-              <span className="font-bold text-slate-900">
-                {activeInWallet?.name || 'Kas Tunai'} ({formatRupiah(activeInWallet?.currentBalance || 0)})
-              </span>
-            </div>
-
-            <input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Catatan transaksi (Opsional)"
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition"
-            />
-          </div>
-
-          {/* Floating Action Bar Tunai */}
-          <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 py-3 px-4 shadow-lg">
-            <div className="w-full max-w-4xl mx-auto">
-              <button
-                type="button"
-                disabled={isSubmitting || isCashInsufficient}
-                onClick={handleConfirmPayment}
-                className="w-full h-13 bg-slate-900 hover:bg-black active:scale-[0.99] disabled:opacity-40 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-md"
-              >
-                {isSubmitting ? (
-                  <span>Memproses Pembayaran...</span>
-                ) : isCashInsufficient ? (
-                  <span>Uang Kurang {formatRupiah(finalTotal - cashReceived)}</span>
-                ) : (
-                  <span>
-                    Selesaikan Pembayaran Tunai • Kembalian {formatRupiah(changeAmount)}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
+          <span className="text-xs text-slate-500 font-bold shrink-0">
+            {cart.reduce((a, b) => a + b.quantity, 0)} item
+          </span>
         </div>
-      )}
 
-      {/* ========================================================= */}
-      {/* 3. LAYAR TRANSFER BANK & E-WALLET / QRIS                   */}
-      {/* ========================================================= */}
-      {step === 'PAY_TRANSFER' && (
-        <div className="space-y-3">
-          {/* Header Transfer */}
-          <div className="sticky top-0 z-30 px-4 py-3.5 bg-white border-b border-slate-200 flex items-center justify-between gap-3 shadow-2xs">
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => setStep('CHOOSE_METHOD')}
-                className="p-1.5 -ml-1 text-slate-700 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
-                title="Ganti Metode"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-base font-extrabold text-slate-900 leading-tight">
-                  Transfer Bank & E-Wallet
-                </h1>
-                <p className="text-xs text-slate-500 font-medium">
-                  Tagihan: <strong className="text-slate-900 font-bold">{formatRupiah(finalTotal)}</strong>
-                </p>
-              </div>
-            </div>
+        {/* Toast Notifikasi Salin */}
+        {copyToast && (
+          <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-slate-900 text-white rounded-xl shadow-xl text-xs font-bold animate-in fade-in duration-100">
+            {copyToast}
           </div>
+        )}
 
-          {/* Error Alert */}
-          {errorMessage && (
-            <div className="mx-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2.5 text-xs font-semibold text-rose-700">
-              <AlertCircle className="w-4.5 h-4.5 text-rose-600 shrink-0" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+        {/* Error Alert */}
+        {errorMessage && (
+          <div className="mx-4 mt-2.5 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs font-semibold text-rose-700">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
-          {/* Toast Salin Rekening */}
-          {copyFeedback && (
-            <div className="mx-4 p-2.5 bg-slate-900 text-white text-xs font-bold rounded-xl text-center shadow-lg animate-in fade-in duration-100">
-              {copyFeedback}
-            </div>
-          )}
+        {/* 2. METODE PEMBAYARAN: CHIP TABS HORIZONTAL (Solid Dark Navy vs Outline Halus) */}
+        <div className="px-4 pt-3 pb-2 shrink-0">
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                { id: 'TUNAI', label: 'Tunai', icon: Coins },
+                { id: 'TRANSFER', label: 'Transfer', icon: Building2 },
+                { id: 'KASBON', label: 'Kasbon', icon: Clock },
+              ] as const
+            ).map((tab) => {
+              const isActive = activeTab === tab.id;
+              const Icon = tab.icon;
 
-          {/* Segmented Filter Kategori Fintech */}
-          <div className="bg-white border-y border-slate-200/90 px-4 py-3">
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
-              {(['ALL', 'BANK', 'EWALLET'] as const).map((cat) => (
+              return (
                 <button
-                  key={cat}
+                  key={tab.id}
                   type="button"
-                  onClick={() => setTransferFilter(cat)}
-                  className={`flex-1 py-2 rounded-lg transition cursor-pointer text-center ${
-                    transferFilter === cat
-                      ? 'bg-white text-slate-900 shadow-2xs font-extrabold'
-                      : 'text-slate-500 hover:text-slate-800'
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setErrorMessage(null);
+                  }}
+                  className={`h-11 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer select-none active:scale-95 ${
+                    isActive
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-white border border-slate-200/90 text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  {cat === 'ALL' ? 'Semua Rekening' : cat === 'BANK' ? 'Transfer Bank' : 'QRIS & E-Wallet'}
+                  {isActive ? (
+                    <Check className="w-3.5 h-3.5 stroke-[3] text-emerald-400" />
+                  ) : (
+                    <Icon className="w-3.5 h-3.5 stroke-[2]" />
+                  )}
+                  <span>{tab.label}</span>
                 </button>
-              ))}
-            </div>
+              );
+            })}
           </div>
+        </div>
 
-          {/* Daftar Rekening Bank & E-Wallet Penerima ala Fintech */}
-          <div className="bg-white border-y border-slate-200/90">
-            <div className="px-4 py-3 bg-slate-50/70 border-b border-slate-100 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              Pilih Rekening Penerima
-            </div>
+        {/* 3. LOGIKA KONTEN SESUAI METODE AKTIF */}
+        <div className="px-4 py-2 flex-1 flex flex-col space-y-3">
+          {/* ========================================================= */}
+          {/* A. JIKA METODE "TUNAI": DISPLAY BESAR + ACCORDION + KEYPAD */}
+          {/* ========================================================= */}
+          {activeTab === 'TUNAI' && (
+            <div className="flex-1 flex flex-col justify-between">
+              {/* BAGIAN ATAS KONTEN TUNAI */}
+              <div className="space-y-2.5">
+                {/* Display Besar Uang Diterima & Status Kembalian (Lebar Vertikal Lebih Proporsional) */}
+                <div className="bg-white border border-slate-200/90 rounded-2xl px-4 py-5 space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
+                    <span>Uang Diterima</span>
+                    {cashReceived > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleKeypadPress('CLEAR')}
+                        className="text-rose-600 hover:text-rose-700 active:scale-95 font-bold text-xs cursor-pointer px-2 py-0.5 rounded-lg bg-rose-50 border border-rose-100"
+                        title="Reset"
+                      >
+                        C
+                      </button>
+                    )}
+                  </div>
 
-            <div className="divide-y divide-slate-100">
-              {wallets
-                .filter((w) => {
-                  if (transferFilter === 'BANK') return w.category === 'BANK';
-                  if (transferFilter === 'EWALLET') return w.category === 'EWALLET';
-                  return w.category === 'BANK' || w.category === 'EWALLET';
-                })
-                .map((w) => {
-                  const isSelected = selectedInWalletId === w.id;
-                  const brand = getWalletBrand(w);
+                  {/* Rumus hitungan matematika jika ada operasi + atau - */}
+                  {(calcExpression.includes('+') || calcExpression.includes('-')) && (
+                    <div className="text-xs font-mono font-bold text-slate-500 tracking-wide truncate">
+                      Hitungan: {calcExpression}
+                    </div>
+                  )}
 
-                  return (
-                    <div
-                      key={w.id}
-                      onClick={() => {
-                        setSelectedInWalletId(w.id);
-                        setMethod(w.category === 'EWALLET' ? 'QRIS' : 'TRANSFER');
-                      }}
-                      className={`px-4 py-4 transition cursor-pointer flex items-center justify-between gap-3 ${
-                        isSelected ? 'bg-blue-50/40 font-bold' : 'hover:bg-slate-50'
-                      }`}
+                  {/* Display Format Ribuan Otomatis Besar & Proporsional */}
+                  <div className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight select-none">
+                    {formatRupiah(cashReceived)}
+                  </div>
+
+                  {/* Status Kembalian Real-time */}
+                  <div
+                    className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center justify-between transition ${
+                      isCashInsufficient
+                        ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                        : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                    }`}
+                  >
+                    <span>
+                      {isCashInsufficient ? 'Status: Uang Kurang' : 'Status: Lunas'}
+                    </span>
+                    <span className="font-black text-sm">
+                      {isCashInsufficient
+                        ? `Kurang: ${formatRupiah(finalTotal - cashReceived)}`
+                        : `Kembalian: ${formatRupiah(changeAmount)}`}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Accordion Pelanggan & Catatan (Ultra-Lean) */}
+                <div className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => setIsAccordionOpen(!isAccordionOpen)}
+                    className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-bold text-slate-600 hover:text-slate-900 transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <User className="w-3.5 h-3.5 text-slate-400" />
+                      <span>+ Tambah Pelanggan & Catatan</span>
+                      {(customerName || notes) && (
+                        <span className="w-2 h-2 rounded-full bg-blue-600" />
+                      )}
+                    </div>
+                    {isAccordionOpen ? (
+                      <ChevronUp className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
+
+                  {isAccordionOpen && (
+                    <div className="px-3.5 pb-3.5 pt-1 space-y-2.5 border-t border-slate-100 animate-in fade-in duration-100">
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Nama Pelanggan (Opsional)"
+                        className="w-full h-9 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition"
+                      />
+
+                      <input
+                        type="text"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Catatan transaksi / referensi (Opsional)"
+                        className="w-full h-9 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* KEYPAD MENEMPEL KE BAWAH (STICKY BOTTOM DOCKED) */}
+              <div className="mt-auto pt-2.5 pb-1">
+                <div className="bg-white border border-slate-200/90 rounded-2xl p-2 select-none shadow-2xs">
+                  {/* 3 Tombol Pintas Cepat: Uang Pas, 50.000, 100.000 */}
+                  <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('UANG_PAS')}
+                      className="h-10 bg-slate-900 active:bg-black text-white rounded-xl font-bold text-xs active:scale-95 transition cursor-pointer flex items-center justify-center shadow-xs"
                     >
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        {/* Brand Badge Fintech */}
-                        <div
-                          className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 tracking-wider shadow-2xs ${brand.bg} ${brand.text}`}
-                        >
-                          {brand.badge}
-                        </div>
+                      Uang Pas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('50000')}
+                      className="h-10 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 border border-blue-200 text-blue-800 rounded-xl font-bold text-xs active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      50.000
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('100000')}
+                      className="h-10 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 border border-blue-200 text-blue-800 rounded-xl font-bold text-xs active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      100.000
+                    </button>
+                  </div>
 
-                        <div className="min-w-0 space-y-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-slate-900 text-sm truncate">
-                              {w.name}
-                            </span>
-                            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
-                              {w.category === 'BANK' ? 'Bank' : 'QRIS'}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-                            <span>Saldo: {formatRupiah(w.currentBalance)}</span>
-                            <span aria-hidden="true">·</span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                copyToClipboard(w.name, w.name);
-                              }}
-                              className="text-blue-600 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
-                            >
-                              <Copy className="w-3 h-3" />
-                              <span>Salin</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                  {/* 4x4 Calculator Keypad dengan Logika Matematika (+, -, =) dan Tombol "C" */}
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {/* Baris 1: 1, 2, 3, + */}
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('1')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      1
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('2')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      2
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('3')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      3
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('+')}
+                      className="h-11 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 border border-blue-200 text-blue-700 rounded-xl font-black text-2xl active:scale-95 transition cursor-pointer flex items-center justify-center"
+                      title="Tambah Uang"
+                    >
+                      +
+                    </button>
 
-                      {/* Radio Indicator Bulat Fintech */}
+                    {/* Baris 2: 4, 5, 6, - */}
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('4')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      4
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('5')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      5
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('6')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      6
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('-')}
+                      className="h-11 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 border border-blue-200 text-blue-700 rounded-xl font-black text-2xl active:scale-95 transition cursor-pointer flex items-center justify-center"
+                      title="Kurang Uang"
+                    >
+                      -
+                    </button>
+
+                    {/* Baris 3: 7, 8, 9, Backspace */}
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('7')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      7
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('8')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      8
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('9')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      9
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('BACKSPACE')}
+                      className="h-11 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border border-slate-200/80 rounded-xl font-bold text-slate-700 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                      title="Hapus Digit"
+                    >
+                      <Delete className="w-5 h-5" />
+                    </button>
+
+                    {/* Baris 4: 000, 0, C, = */}
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('000')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-sm text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center tracking-tight"
+                    >
+                      000
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('0')}
+                      className="h-11 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200/80 rounded-xl font-bold text-xl text-slate-900 active:scale-95 transition cursor-pointer flex items-center justify-center"
+                    >
+                      0
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('CLEAR')}
+                      className="h-11 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border border-rose-200 text-rose-600 rounded-xl font-black text-lg active:scale-95 transition cursor-pointer flex items-center justify-center"
+                      title="Reset"
+                    >
+                      C
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleKeypadPress('EQUAL')}
+                      className="h-11 bg-slate-900 active:bg-black text-white rounded-xl font-black text-xl active:scale-95 transition cursor-pointer flex items-center justify-center shadow-xs"
+                      title="Hitung Total"
+                    >
+                      =
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* B. JIKA METODE "TRANSFER": KARTU REKENING DINAMIS (WALLETS)*/}
+          {/* ========================================================= */}
+          {activeTab === 'TRANSFER' && (
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-slate-400 px-0.5">
+                <span>Pilih Rekening Tujuan Transfer</span>
+                <span className="text-emerald-600 font-bold">Terkunci Pas: {formatRupiah(finalTotal)}</span>
+              </div>
+
+              <div className="space-y-2">
+                {wallets
+                  .filter((w) => w.category === 'BANK' || w.category === 'EWALLET')
+                  .map((w) => {
+                    const isSelected = selectedWalletId === w.id;
+                    const badge = getWalletFintechBadge(w);
+                    const accountNumber = w.notes || '102-00-1928374-1';
+
+                    return (
                       <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition ${
+                        key={w.id}
+                        onClick={() => setSelectedWalletId(w.id)}
+                        className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between gap-3 ${
                           isSelected
-                            ? 'bg-blue-600 border-blue-600 text-white'
-                            : 'border-slate-300'
+                            ? 'bg-blue-50/50 border-blue-500 shadow-2xs'
+                            : 'bg-white border-slate-200/90 hover:bg-slate-50'
                         }`}
                       >
-                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        <div className="flex items-center gap-3 min-w-0">
+                          {/* Avatar Badge Brand Inisial */}
+                          <div
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs shrink-0 tracking-wider shadow-2xs ${badge.bg} ${badge.text}`}
+                          >
+                            {badge.badge}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-extrabold text-slate-900 text-sm truncate">
+                                {w.name}
+                              </span>
+                              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
+                                {badge.label}
+                              </span>
+                            </div>
+
+                            {/* Nomor Akun & Tombol Salin Cepat */}
+                            <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                              <span className="font-mono text-slate-700 font-semibold truncate max-w-[150px]">
+                                {accountNumber}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyAccount(accountNumber, w.name);
+                                }}
+                                className="text-blue-600 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <Copy className="w-3 h-3" />
+                                <span>Salin</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Radio Indikator Bulat */}
+                        <div
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                            isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
+                    );
+                  })}
 
-          {/* Form Keterangan & Catatan Transfer */}
-          <div className="bg-white border-y border-slate-200/90 px-4 py-4 space-y-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
-              Keterangan Transfer (Opsional)
-            </span>
-
-            <input
-              type="text"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Nama Pengirim / Pelanggan (Opsional)"
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition"
-            />
-
-            <input
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Nomor referensi transfer / catatan (Opsional)"
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition"
-            />
-          </div>
-
-          {/* Floating Action Bar Transfer */}
-          <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 py-3 px-4 shadow-lg">
-            <div className="w-full max-w-4xl mx-auto">
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={handleConfirmPayment}
-                className="w-full h-13 bg-slate-900 hover:bg-black active:scale-[0.99] disabled:opacity-40 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-md"
-              >
-                {isSubmitting ? (
-                  <span>Memproses Pembayaran...</span>
-                ) : (
-                  <span>
-                    Konfirmasi Transfer • {formatRupiah(finalTotal)}
-                  </span>
+                {wallets.filter((w) => w.category === 'BANK' || w.category === 'EWALLET').length === 0 && (
+                  <div className="p-4 bg-white border border-slate-200 rounded-2xl text-center text-xs text-slate-500">
+                    Belum ada rekening bank atau e-wallet di menu Dompet. Silakan tambah rekening terlebih dahulu.
+                  </div>
                 )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* 4. LAYAR KASBON (PAYLATER TOKO FINTECH STYLE)              */}
-      {/* ========================================================= */}
-      {step === 'PAY_KASBON' && (
-        <div className="space-y-3">
-          {/* Header Kasbon */}
-          <div className="sticky top-0 z-30 px-4 py-3.5 bg-white border-b border-slate-200 flex items-center justify-between gap-3 shadow-2xs">
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => setStep('CHOOSE_METHOD')}
-                className="p-1.5 -ml-1 text-slate-700 hover:text-black active:bg-slate-100 rounded-xl transition cursor-pointer"
-                title="Ganti Metode"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <div>
-                <h1 className="text-base font-extrabold text-slate-900 leading-tight">
-                  Kasbon / PayLater Toko
-                </h1>
-                <p className="text-xs text-indigo-700 font-semibold">
-                  Total Tagihan: <strong>{formatRupiah(finalTotal)}</strong>
-                </p>
               </div>
-            </div>
-          </div>
 
-          {/* Error Alert */}
-          {errorMessage && (
-            <div className="mx-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-2.5 text-xs font-semibold text-rose-700">
-              <AlertCircle className="w-4.5 h-4.5 text-rose-600 shrink-0" />
-              <span>{errorMessage}</span>
+              {/* Accordion Pelanggan & Catatan Transfer */}
+              <div className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs mt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAccordionOpen(!isAccordionOpen)}
+                  className="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-bold text-slate-600 hover:text-slate-900 transition cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <User className="w-3.5 h-3.5 text-slate-400" />
+                    <span>+ Tambah Pelanggan & Catatan Transfer</span>
+                    {(customerName || notes) && (
+                      <span className="w-2 h-2 rounded-full bg-blue-600" />
+                    )}
+                  </div>
+                  {isAccordionOpen ? (
+                    <ChevronUp className="w-4 h-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                  )}
+                </button>
+
+                {isAccordionOpen && (
+                  <div className="px-3.5 pb-3.5 pt-1 space-y-2.5 border-t border-slate-100 animate-in fade-in duration-100">
+                    <input
+                      type="text"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Nama Pengirim / Pelanggan (Opsional)"
+                      className="w-full h-9 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition"
+                    />
+
+                    <input
+                      type="text"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Nomor referensi / catatan transfer (Opsional)"
+                      className="w-full h-9 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
-          {/* Banner Edukasi Kasbon */}
-          <div className="bg-indigo-50 border-y border-indigo-200/80 px-4 py-3.5 space-y-1">
-            <div className="flex items-center gap-2 font-bold text-indigo-900 text-xs">
-              <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
-              <span>Transaksi Dicatat Sebagai Piutang Toko</span>
-            </div>
-            <p className="text-indigo-800 leading-relaxed text-xs">
-              Pembayaran ditunda oleh pembeli. Saldo modal tetap akan dipotong otomatis dari dompet modal server terkait.
-            </p>
-          </div>
-
-          {/* Pilihan Cepat Jatuh Tempo */}
-          <div className="bg-white border-y border-slate-200/90 px-4 py-3.5 space-y-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-              Pilih Jangka Waktu Jatuh Tempo
-            </span>
-
-            <div className="flex items-center gap-2">
-              {[3, 7, 14, 30].map((days) => (
-                <button
-                  key={days}
-                  type="button"
-                  onClick={() => setTempoDays(days)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                    tempoDays === days
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {days} Hari
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Form Identitas Pelanggan Kasbon */}
-          <div className="bg-white border-y border-slate-200/90 px-4 py-4.5 space-y-3.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
-              Data Pembeli / Pelanggan
-            </span>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Nama Pelanggan <span className="text-rose-600">*Wajib</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="Nama pembeli / penghutang"
-                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-indigo-600 transition"
-                />
+          {/* ========================================================= */}
+          {/* C. JIKA METODE "KASBON": FORM WAJIB PELANGGAN & TEMPO     */}
+          {/* ========================================================= */}
+          {activeTab === 'KASBON' && (
+            <div className="bg-white border border-slate-200/90 rounded-2xl p-4 space-y-3.5 shadow-2xs">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <span className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                  Data Piutang / Kasbon
+                </span>
+                <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                  Belum Lunas
+                </span>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Nomor WhatsApp / HP <span className="text-slate-400 font-normal">(Opsional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={customerPhone}
-                  onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="08xxxx untuk follow-up nota & penagihan"
-                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-indigo-600 transition"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Catatan Janji Bayar <span className="text-slate-400 font-normal">(Opsional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Misal: Janji bayar tgl 25 / tetangga depan"
-                  className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-indigo-600 transition"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Rincian Pemotongan Modal Server */}
-          <div className="bg-white border-y border-slate-200/90 px-4 py-4 space-y-2.5">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block">
-              Pemotongan Saldo Modal Server
-            </span>
-            <div className="divide-y divide-slate-100">
-              {modalAnalysis.breakdown.map((b) => (
-                <div key={b.walletId} className="py-2.5 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="font-bold text-slate-800 block text-sm">{b.walletName}</span>
-                    <span className="text-slate-400 text-[11px]">Sisa saldo: {formatRupiah(b.remainingBalance)}</span>
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    Pilih / Masukkan Nama Pelanggan <span className="text-rose-600">*Wajib</span>
+                  </label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                    <input
+                      type="text"
+                      required
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      placeholder="Ketik nama pelanggan / pembeli"
+                      className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition"
+                    />
                   </div>
-                  <span className="font-bold text-rose-600 text-sm">-{formatRupiah(b.cost)}</span>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Floating Action Bar Kasbon */}
-          <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 py-3 px-4 shadow-lg">
-            <div className="w-full max-w-4xl mx-auto">
-              <button
-                type="button"
-                disabled={isSubmitting || !customerName.trim()}
-                onClick={handleConfirmPayment}
-                className="w-full h-13 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] disabled:opacity-40 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-md"
-              >
-                {isSubmitting ? (
-                  <span>Menyimpan Piutang...</span>
-                ) : (
-                  <span>Catat Sebagai Kasbon • {formatRupiah(finalTotal)}</span>
-                )}
-              </button>
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    Nomor WhatsApp / HP <span className="text-slate-400 font-normal">(Opsional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    placeholder="08xxxx untuk follow-up nota & penagihan"
+                    className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    Jatuh Tempo (Opsional)
+                  </label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[3, 7, 14, 30].map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => setTempoDays(days)}
+                        className={`h-9 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          tempoDays === days
+                            ? 'bg-slate-900 text-white shadow-2xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        {days} Hari
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    Catatan Janji Bayar <span className="text-slate-400 font-normal">(Opsional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Misal: Janji bayar akhir bulan"
+                    className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-900 transition"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
+
+      {/* ========================================================= */}
+      {/* 5. TOMBOL UTAMA (STICKY BOTTOM TANPA TERDORONG KELUAR)   */}
+      {/* ========================================================= */}
+      <div className="sticky bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 py-3 px-4 shadow-lg shrink-0">
+        <div className="w-full max-w-4xl mx-auto">
+          <button
+            type="button"
+            disabled={
+              isSubmitting ||
+              (activeTab === 'TUNAI' && isCashInsufficient) ||
+              (activeTab === 'KASBON' && !customerName.trim())
+            }
+            onClick={handleConfirmPayment}
+            className="w-full h-13 bg-slate-900 hover:bg-black active:scale-[0.99] disabled:opacity-40 text-white font-extrabold rounded-2xl text-sm flex items-center justify-center gap-2 transition cursor-pointer shadow-md"
+          >
+            {isSubmitting ? (
+              <span>Memproses Transaksi...</span>
+            ) : activeTab === 'TUNAI' && isCashInsufficient ? (
+              <span>Uang Kurang {formatRupiah(finalTotal - cashReceived)}</span>
+            ) : activeTab === 'KASBON' && !customerName.trim() ? (
+              <span>Masukkan Nama Pelanggan Kasbon</span>
+            ) : (
+              <span>
+                Konfirmasi Pembayaran • {formatRupiah(finalTotal)}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

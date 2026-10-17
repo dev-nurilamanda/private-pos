@@ -156,11 +156,43 @@ export const WalletModal: React.FC<WalletModalProps> = ({
             <input
               type="text"
               required
-              placeholder="Contoh: Kas Laci Kasir, Bank BCA, Pulsa Portal"
+              placeholder="Contoh: Rekening BCA Kasir, DANA Bisnis, Kas Tunai"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 font-medium text-xs focus:bg-white focus:border-indigo-600 focus:ring-2 focus:ring-indigo-500/20"
             />
+
+            {!isEditing && (
+              <div className="pt-2">
+                <span className="text-[10px] text-slate-400 font-semibold block mb-1">Pilihan Cepat Brand:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: 'BCA', fullName: 'Rekening Bank BCA', cat: 'BANK' as const, id: 'bank_bca' },
+                    { label: 'BRI', fullName: 'Rekening Bank BRI', cat: 'BANK' as const, id: 'bank_bri' },
+                    { label: 'Mandiri', fullName: 'Rekening Bank Mandiri', cat: 'BANK' as const, id: 'bank_mandiri' },
+                    { label: 'BNI', fullName: 'Rekening Bank BNI', cat: 'BANK' as const, id: 'bank_bni' },
+                    { label: 'DANA', fullName: 'DANA Bisnis Kasir', cat: 'EWALLET' as const, id: 'ewallet_dana' },
+                    { label: 'GoPay', fullName: 'GoPay Usaha Kasir', cat: 'EWALLET' as const, id: 'ewallet_gopay' },
+                    { label: 'QRIS', fullName: 'QRIS Kasir Digital', cat: 'EWALLET' as const, id: 'qris_toko' },
+                    { label: 'Kas Tunai', fullName: 'Kas Tunai Laci Kasir', cat: 'CASH' as const, id: 'cash_laci' },
+                    { label: 'Server Pulsa', fullName: 'Saldo Server Pulsa & PPOB', cat: 'SERVER' as const, id: 'server_portal' },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => {
+                        setName(p.fullName);
+                        setCategory(p.cat);
+                        setCustomId(p.id);
+                      }}
+                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] transition cursor-pointer"
+                    >
+                      +{p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
