@@ -133,11 +133,16 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
     let totalStockAssetValue = 0;
     let totalProfit = 0;
     let totalMarginPercent = 0;
+    let outOfStockCount = 0;
 
     products.forEach((p) => {
       const isPhys = p.isPhysical ?? p.trackStock ?? (p.stock > 0);
-      if (isPhys && p.stock > 0) {
-        totalStockAssetValue += p.costPrice * p.stock;
+      if (isPhys) {
+        if (p.stock > 0) {
+          totalStockAssetValue += p.costPrice * p.stock;
+        } else {
+          outOfStockCount++;
+        }
       }
       const profit = p.sellingPrice - p.costPrice;
       totalProfit += profit;
@@ -155,6 +160,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
       totalStockAssetValue,
       avgProfit,
       avgMarginPercent,
+      outOfStockCount,
     };
   }, [products]);
 
@@ -352,60 +358,40 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
 
   return (
     <div className="-mx-4 pb-20">
-      {/* 1. Baris Ringkasan Metrik (Lega, Terbuka Tanpa Kotak Sempit, Padding Identik px-4) */}
-      <div className="px-4 py-3 bg-white border-b border-slate-200">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              <Boxes className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>Varian</span>
-            </div>
-            <div className="text-sm sm:text-base font-extrabold text-slate-900">
-              {summaryMetrics.totalVariants} <span className="text-xs font-normal text-slate-500">item</span>
-            </div>
-          </div>
-
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-              <Package className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <span>Aset Stok</span>
-            </div>
-            <div className="text-sm sm:text-base font-extrabold text-slate-900 truncate">
-              {formatRupiah(summaryMetrics.totalStockAssetValue)}
-            </div>
-          </div>
-
-          <div className="space-y-0.5 text-right">
-            <div className="flex items-center justify-end gap-1.5 text-[11px] font-semibold text-emerald-600 uppercase tracking-wider">
-              <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span>Rata Laba</span>
-            </div>
-            <div className="text-sm sm:text-base font-extrabold text-emerald-700 truncate">
-              {formatRupiah(summaryMetrics.avgProfit)}
-              <span className="text-[11px] font-semibold text-emerald-600 ml-1">
-                (+{summaryMetrics.avgMarginPercent}%)
-              </span>
-            </div>
-          </div>
+      {/* 1. Header Toolbar (Bersih, Tanpa Metric Grid) */}
+      <div className="px-4 py-3.5 bg-white border-b border-slate-200 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-bold text-slate-900">Katalog Produk</h2>
+          <p className="text-[11px] text-slate-500">
+            {products.length} varian produk • Stok aset: {formatRupiah(summaryMetrics.totalStockAssetValue)}
+          </p>
         </div>
+
+        <button
+          onClick={openCreateModal}
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-black active:scale-95 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+        >
+          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+          <span>Tambah</span>
+        </button>
       </div>
 
-      {/* 2. Bar Pencarian & Dropdown Filter (Lega, Padding Identik px-4) */}
+      {/* 2. Bar Pencarian & Dropdown Filter (FLAT EDGE-TO-EDGE) */}
       <div className="px-4 py-3 bg-white border-b border-slate-200 space-y-2.5">
         {/* Kolom Pencarian */}
         <div className="relative w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3 pointer-events-none" />
           <input
             type="text"
             placeholder="Cari nama produk, server, atau kategori..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-11 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl pl-10 pr-9 text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-800 transition"
+            className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-8 text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-900"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -413,13 +399,13 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
         </div>
 
         {/* Filter Dropdown Berdampingan */}
-        <div className="flex items-center gap-2.5 w-full">
+        <div className="flex items-center gap-2 w-full">
           {/* Dropdown Server */}
           <div className="relative flex-1 min-w-0">
             <select
               value={selectedServer}
               onChange={(e) => setSelectedServer(e.target.value)}
-              className="w-full h-10 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl pl-3.5 pr-8 text-xs font-semibold text-slate-800 focus:outline-none focus:border-slate-800 cursor-pointer appearance-none truncate transition"
+              className="w-full h-9 bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-7 text-xs font-semibold text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer appearance-none truncate"
             >
               <option value="ALL">Semua Server ({products.length})</option>
               {serverOptions.map((s) => {
@@ -433,7 +419,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                 );
               })}
             </select>
-            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
           </div>
 
           {/* Dropdown Kategori */}
@@ -441,7 +427,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full h-10 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 rounded-xl pl-3.5 pr-8 text-xs font-semibold text-slate-800 focus:outline-none focus:border-slate-800 cursor-pointer appearance-none truncate transition"
+              className="w-full h-9 bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-7 text-xs font-semibold text-slate-800 focus:outline-none focus:border-slate-900 cursor-pointer appearance-none truncate"
             >
               <option value="ALL">Semua Kategori</option>
               {categoryOptions.map((c) => {
@@ -453,7 +439,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                 );
               })}
             </select>
-            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
           </div>
         </div>
 
@@ -478,7 +464,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
         )}
       </div>
 
-      {/* 3. Daftar Produk (Edge-to-Edge List Bersih & Lega Identik dengan Kasir) */}
+      {/* 3. Daftar Produk (FLAT EDGE-TO-EDGE) */}
       <div className="bg-white divide-y divide-slate-100">
         {filteredProducts.length === 0 ? (
           <div className="py-16 px-6 text-center space-y-3">
@@ -510,7 +496,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
             return (
               <div
                 key={p.id}
-                className="px-4 py-4 sm:py-5 hover:bg-slate-50 transition-colors space-y-3"
+                className="px-4 py-4 hover:bg-slate-50/70 transition-colors space-y-3"
               >
                 {/* Baris Atas: Nama Produk & Tag Server/Kategori */}
                 <div className="flex items-start justify-between gap-3">
@@ -519,18 +505,20 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                       {p.name}
                     </h3>
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-bold text-[11px] border border-slate-200">
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 font-semibold text-[11px]">
                         {server}
                       </span>
-                      <span className="px-2 py-0.5 rounded-md bg-slate-50 text-slate-600 font-semibold text-[11px] border border-slate-200">
-                        {category}
-                      </span>
+                      {category && category !== server && (
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium text-[11px]">
+                          {category}
+                        </span>
+                      )}
                       {isPhys ? (
                         <span
-                          className={`px-2 py-0.5 rounded-md font-bold text-[11px] border ${
+                          className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${
                             isOutOfStock
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              ? 'bg-rose-50 text-rose-700'
+                              : 'bg-emerald-50 text-emerald-800'
                           }`}
                         >
                           {isOutOfStock ? 'Stok Habis' : `Stok: ${p.stock}`}
@@ -543,7 +531,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                     </div>
                   </div>
 
-                  {/* Tombol Aksi Kanan: Quick Edit, Edit, Hapus (Gaya Outline Halus, Stroke 1.75, Sejajar & Minimalis) */}
+                  {/* Tombol Aksi Kanan: Quick Edit, Edit, Hapus */}
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => openQuickPriceModal(p)}
@@ -571,19 +559,19 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                   </div>
                 </div>
 
-                {/* Baris Bawah: Rincian Finansial (Modal vs Jual vs Laba) */}
-                <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-2.5 flex items-center justify-between text-xs">
+                {/* Baris Bawah: Rincian Finansial Flat (Tanpa Box Container, Garis Halus border-t) */}
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
                   <div>
-                    <span className="text-[11px] text-slate-500 block font-medium">
+                    <span className="text-[11px] text-slate-400 block font-medium">
                       Harga Modal
                     </span>
-                    <span className="font-bold text-slate-700">
+                    <span className="font-semibold text-slate-700">
                       {formatRupiah(p.costPrice)}
                     </span>
                   </div>
 
-                  <div className="text-right sm:text-center">
-                    <span className="text-[11px] text-slate-500 block font-medium">
+                  <div className="text-center">
+                    <span className="text-[11px] text-slate-400 block font-medium">
                       Harga Jual
                     </span>
                     <span className="font-black text-slate-900 text-sm">
@@ -592,14 +580,16 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                   </div>
 
                   <div className="text-right">
-                    <span className="text-[11px] text-emerald-700 font-semibold block">
-                      Margin Laba
-                    </span>
-                    <span className="font-black text-emerald-700 text-xs sm:text-sm">
-                      +{formatRupiah(profitRp)}
-                      <span className="text-[10px] ml-1 text-emerald-600 font-bold">
-                        ({marginPercent}%)
+                    <div className="flex items-center justify-end gap-1">
+                      <span className="text-[11px] text-emerald-600 font-medium">
+                        Laba
                       </span>
+                      <span className="text-[10px] font-bold text-emerald-600">
+                        (+{marginPercent}%)
+                      </span>
+                    </div>
+                    <span className="font-bold text-emerald-600 text-sm">
+                      +{formatRupiah(profitRp)}
                     </span>
                   </div>
                 </div>

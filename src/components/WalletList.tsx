@@ -55,6 +55,12 @@ export const WalletList: React.FC = () => {
   }, isModalOpen, 40);
 
   const totalBalance = wallets.reduce((acc, w) => acc + (w.currentBalance || 0), 0);
+  const cashBalance = wallets
+    .filter((w) => w.category === 'CASH')
+    .reduce((acc, w) => acc + (w.currentBalance || 0), 0);
+  const serverAndBankBalance = wallets
+    .filter((w) => w.category !== 'CASH')
+    .reduce((acc, w) => acc + (w.currentBalance || 0), 0);
 
   const handleOpenAdd = () => {
     setSelectedWallet(null);
@@ -146,62 +152,63 @@ export const WalletList: React.FC = () => {
 
   return (
     <div className="-mx-4 pb-20">
-      {/* 1. Bar Ringkas Total Modal (Lega, Terbuka, Padding Identik px-4) */}
-      <div className="px-4 py-4 sm:py-5 bg-white border-b border-slate-200">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <span className="text-xs text-slate-500 font-semibold block mb-0.5">
-              Total Modal Kasir
-            </span>
-            <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
-              {formatRupiah(totalBalance)}
-            </div>
+      {/* Header Total Modal Kasir & Aksi (Bersih, Tanpa Metric Grid) */}
+      <div className="bg-white border-b border-slate-200 px-4 py-4 flex items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+            Total Modal Kasir
+          </span>
+          <div className="text-2xl font-black text-slate-900 tracking-tight">
+            {formatRupiah(totalBalance)}
           </div>
+          <span className="text-xs text-slate-500 font-medium block">
+            {wallets.length} kantong aktif
+          </span>
+        </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => {
-                if (wallets.length > 0) {
-                  setTransferFrom(wallets[0].id);
-                  setTransferTo(wallets[1]?.id || wallets[0].id);
-                }
-                setIsTransferOpen(true);
-              }}
-              disabled={wallets.length < 2}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-200 text-slate-800 text-xs font-bold transition cursor-pointer disabled:opacity-40"
-              title="Pindah Saldo Antar Kantong"
-            >
-              <ArrowRightLeft className="w-3.5 h-3.5 text-slate-700" />
-              <span>Pindah Saldo</span>
-            </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => {
+              if (wallets.length > 0) {
+                setTransferFrom(wallets[0].id);
+                setTransferTo(wallets[1]?.id || wallets[0].id);
+              }
+              setIsTransferOpen(true);
+            }}
+            disabled={wallets.length < 2}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 text-xs font-bold transition cursor-pointer disabled:opacity-40"
+            title="Pindah Saldo Antar Kantong"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5 text-slate-700" />
+            <span>Pindah</span>
+          </button>
 
-            <button
-              onClick={handleOpenAdd}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-black active:scale-95 text-white text-xs font-bold transition cursor-pointer shadow-xs"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Tambah</span>
-            </button>
-          </div>
+          <button
+            onClick={handleOpenAdd}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-black active:scale-95 text-white text-xs font-bold transition cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Tambah</span>
+          </button>
         </div>
       </div>
 
-      {/* 2. List Kantong Saldo (Lega & Edge-to-Edge) */}
-      {wallets.length === 0 ? (
-        <div className="text-center py-16 px-4 bg-white space-y-3">
-          <p className="text-sm text-slate-500 font-medium">Belum ada kantong saldo kasir/modal.</p>
-          <button
-            onClick={handleSeed}
-            disabled={isSeeding}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-slate-900 active:bg-black text-white rounded-xl text-xs font-bold cursor-pointer transition shadow-xs"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            {isSeeding ? 'Membuat...' : 'Muat Kantong Bawaan'}
-          </button>
-        </div>
-      ) : (
-        <div className="bg-white divide-y divide-slate-100">
-          {wallets.map((wallet) => {
+      {/* 2. List Kantong Saldo (FLAT EDGE-TO-EDGE, TANPA BOX CONTAINER) */}
+      <div className="bg-white divide-y divide-slate-100 border-b border-slate-200">
+        {wallets.length === 0 ? (
+          <div className="py-20 px-4 text-center space-y-3">
+            <p className="text-xs text-slate-400">Belum ada kantong saldo kasir/modal.</p>
+            <button
+              onClick={handleSeed}
+              disabled={isSeeding}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 active:bg-black text-white rounded-lg text-xs font-bold cursor-pointer transition"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              {isSeeding ? 'Membuat...' : 'Muat Kantong Bawaan'}
+            </button>
+          </div>
+        ) : (
+          wallets.map((wallet) => {
             const meta = categoryMeta[wallet.category] || categoryMeta.OTHER;
             const Icon = meta.icon;
 
@@ -209,26 +216,26 @@ export const WalletList: React.FC = () => {
               <div
                 key={wallet.id}
                 onClick={() => handleOpenEdit(wallet)}
-                className="group flex items-center justify-between px-4 py-4 hover:bg-slate-50 active:bg-slate-100/80 transition cursor-pointer select-none"
+                className="group flex items-center justify-between px-4 py-3.5 hover:bg-slate-50/70 transition cursor-pointer select-none"
               >
                 {/* Kiri: Ikon & Nama */}
                 <div className="flex items-center gap-3 min-w-0 pr-3">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-800 flex items-center justify-center shrink-0">
-                    <Icon className="w-5 h-5 stroke-[1.8]" />
+                  <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+                    <Icon className="w-4 h-4 stroke-[1.8]" />
                   </div>
                   <div className="min-w-0">
-                    <span className="font-semibold text-slate-900 text-base truncate block group-hover:text-black transition">
+                    <span className="font-semibold text-slate-900 text-sm truncate block group-hover:text-black transition">
                       {wallet.name}
                     </span>
-                    <span className="text-xs text-slate-400 font-medium">
+                    <span className="text-[11px] text-slate-400 font-medium">
                       {meta.label}
                     </span>
                   </div>
                 </div>
 
                 {/* Kanan: Nominal Saldo & Aksi */}
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <span className="text-base font-bold text-slate-900 tracking-tight">
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-sm font-bold text-slate-900 tracking-tight">
                     {formatRupiah(wallet.currentBalance)}
                   </span>
 
@@ -237,25 +244,25 @@ export const WalletList: React.FC = () => {
                       e.stopPropagation();
                       handleOpenEdit(wallet);
                     }}
-                    className="p-1.5 text-slate-400 hover:text-slate-900 active:bg-slate-100 rounded-lg transition"
+                    className="p-1.5 text-slate-400 hover:text-slate-900 rounded-lg transition"
                     title="Atur Saldo"
                   >
-                    <Edit3 className="w-4 h-4" />
+                    <Edit3 className="w-3.5 h-3.5" />
                   </button>
 
                   <button
                     onClick={(e) => handleDelete(e, wallet)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 active:bg-rose-50 rounded-lg transition"
+                    className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition"
                     title="Hapus"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
       {/* Wallet Edit/Create Modal */}
       <WalletModal

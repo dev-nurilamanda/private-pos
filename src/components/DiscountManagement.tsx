@@ -144,33 +144,35 @@ export const DiscountManagement: React.FC<DiscountManagementProps> = ({
     });
   };
 
+  const activeCount = discounts.filter((d) => d.isActive).length;
+  const percentCount = discounts.filter((d) => d.type === 'PERCENT').length;
+  const fixedCount = discounts.filter((d) => d.type === 'FIXED').length;
+
   return (
     <div className="-mx-4 pb-28">
-      {/* 1. Header Toolbar Flat */}
-      <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-bold text-slate-900 leading-tight">
-            Daftar Diskon
-          </h2>
-          <p className="text-xs text-slate-400">
-            {discounts.length} promo & diskon tersedia
+      {/* 1. Header Toolbar Flat (Bersih dengan Lebar Vertikal Nyaman) */}
+      <div className="px-4 py-4.5 bg-white border-b border-slate-200 flex items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <h2 className="text-base font-bold text-slate-900">Kelola Diskon & Promo</h2>
+          <p className="text-xs text-slate-500">
+            {discounts.length} promo total • {activeCount} aktif
           </p>
         </div>
 
         <button
           type="button"
           onClick={openCreateModal}
-          className="px-3 py-1.5 bg-slate-900 hover:bg-black active:scale-95 text-white font-semibold text-xs rounded-lg transition cursor-pointer flex items-center gap-1.5"
+          className="px-4 py-2 bg-slate-900 hover:bg-black active:scale-95 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-xs"
         >
-          <Plus className="w-3.5 h-3.5 stroke-[2.2]" />
-          <span>Tambah Diskon</span>
+          <Plus className="w-4 h-4 stroke-[2.2]" />
+          <span>Tambah Promo</span>
         </button>
       </div>
 
-      {/* 2. Daftar Diskon (Flat List Minimalist) */}
+      {/* 2. Daftar Diskon (Flat List dengan Lebar Vertikal Lega) */}
       <div className="bg-white divide-y divide-slate-100 border-b border-slate-200">
         {discounts.length === 0 ? (
-          <div className="py-20 px-4 text-center space-y-3">
+          <div className="py-24 px-4 text-center space-y-3">
             <Tag className="w-8 h-8 text-slate-300 mx-auto" />
             <p className="text-xs text-slate-400">
               Belum ada diskon yang dibuat.
@@ -178,7 +180,7 @@ export const DiscountManagement: React.FC<DiscountManagementProps> = ({
             <button
               type="button"
               onClick={openCreateModal}
-              className="px-3.5 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold active:scale-95 transition"
+              className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold active:scale-95 transition"
             >
               + Tambah Diskon Baru
             </button>
@@ -190,31 +192,31 @@ export const DiscountManagement: React.FC<DiscountManagementProps> = ({
             return (
               <div
                 key={d.id}
-                className={`px-4 py-3 flex items-center justify-between gap-3 transition-colors ${
-                  d.isActive ? 'hover:bg-slate-50/60' : 'opacity-50 bg-slate-50/40'
+                className={`px-4 py-4.5 sm:py-5 flex items-center justify-between gap-3.5 transition-colors ${
+                  d.isActive ? 'hover:bg-slate-50/60' : 'opacity-60 bg-slate-50/40'
                 }`}
               >
                 {/* Kiri: Avatar Flat Minimal & Info Diskon */}
-                <div className="flex items-center gap-3 min-w-0 flex-1 pr-1">
-                  <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs bg-slate-100 text-slate-700">
-                    {d.type === 'PERCENT' ? `${d.value}%` : <Tag className="w-4 h-4 text-slate-600" />}
+                <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-1">
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0 font-extrabold text-xs bg-slate-100 text-slate-800">
+                    {d.type === 'PERCENT' ? `${d.value}%` : <Tag className="w-4.5 h-4.5 text-slate-700" />}
                   </div>
 
-                  <div className="min-w-0 space-y-0.5">
+                  <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-semibold text-slate-900 text-sm truncate">
+                      <h4 className="font-bold text-slate-900 text-sm truncate">
                         {d.name}
                       </h4>
                       <span
-                        className={`text-[10px] font-medium shrink-0 ${
-                          d.isActive ? 'text-emerald-600' : 'text-slate-400'
+                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                          d.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
                         }`}
                       >
-                        • {d.isActive ? 'Aktif' : 'Nonaktif'}
+                        {d.isActive ? 'Aktif' : 'Nonaktif'}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500 truncate">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 truncate flex-wrap">
                       <span className="font-bold text-slate-800">
                         {d.type === 'PERCENT'
                           ? `Potongan ${d.value}%`
@@ -250,9 +252,9 @@ export const DiscountManagement: React.FC<DiscountManagementProps> = ({
                       <button
                         type="button"
                         onClick={() => handleResetDailyQuota(d)}
-                        className="text-[10px] font-medium text-slate-400 hover:text-slate-700 flex items-center gap-1 cursor-pointer pt-0.5"
+                        className="text-[11px] font-medium text-slate-400 hover:text-slate-700 flex items-center gap-1 cursor-pointer pt-0.5"
                       >
-                        <RotateCcw className="w-2.5 h-2.5" />
+                        <RotateCcw className="w-3 h-3" />
                         <span>Reset kuota hari ini ({dailyStatus.usedToday}x terpakai)</span>
                       </button>
                     )}
@@ -265,13 +267,13 @@ export const DiscountManagement: React.FC<DiscountManagementProps> = ({
                   <button
                     type="button"
                     onClick={() => handleToggleActive(d)}
-                    className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                    className={`w-10 h-6 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
                       d.isActive ? 'bg-slate-900' : 'bg-slate-200'
                     }`}
                     title={d.isActive ? 'Nonaktifkan Diskon' : 'Aktifkan Diskon'}
                   >
                     <div
-                      className={`bg-white w-4 h-4 rounded-full transition-transform ${
+                      className={`bg-white w-5 h-5 rounded-full shadow-2xs transition-transform ${
                         d.isActive ? 'translate-x-4' : 'translate-x-0'
                       }`}
                     />
@@ -281,20 +283,20 @@ export const DiscountManagement: React.FC<DiscountManagementProps> = ({
                   <button
                     type="button"
                     onClick={() => openEditModal(d)}
-                    className="p-1.5 text-slate-400 hover:text-slate-700 active:bg-slate-100 rounded-lg transition cursor-pointer"
+                    className="p-2 text-slate-400 hover:text-slate-700 active:bg-slate-100 rounded-xl transition cursor-pointer"
                     title="Edit Diskon"
                   >
-                    <Edit2 className="w-3.5 h-3.5" />
+                    <Edit2 className="w-4 h-4" />
                   </button>
 
                   {/* Delete */}
                   <button
                     type="button"
                     onClick={() => d.id && handleDelete(d.id)}
-                    className="p-1.5 text-slate-400 hover:text-rose-600 active:bg-rose-50 rounded-lg transition cursor-pointer"
+                    className="p-2 text-slate-400 hover:text-rose-600 active:bg-rose-50 rounded-xl transition cursor-pointer"
                     title="Hapus Diskon"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>

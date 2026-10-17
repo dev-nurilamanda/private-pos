@@ -59,39 +59,44 @@ export const OrdersAndDebts: React.FC = () => {
     }
   };
 
+  const totalSelling = transactions.reduce((sum, t) => sum + t.sellingPrice, 0);
+  const totalProfit = transactions.reduce((sum, t) => sum + t.profit, 0);
+
   return (
     <div className="-mx-4 pb-20">
-      {/* Piutang Warning Banner (Lega & Edge-to-Edge jika ada) */}
+      {/* Kasbon Warning Banner jika ada kasbon aktif */}
       {unpaidCount > 0 && (
-        <div className="px-4 py-3.5 bg-amber-50/80 border-b border-amber-200/70 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <Clock className="w-4 h-4 text-amber-700 shrink-0" />
-            <div>
-              <span className="text-xs font-bold text-amber-950 block">
-                {unpaidCount} Tagihan Belum Lunas
+        <div className="px-4 py-3 bg-amber-50/90 border-b border-amber-200/80 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+            <div className="text-xs truncate">
+              <span className="font-bold text-amber-900">
+                {unpaidCount} Kasbon Belum Lunas
               </span>
-              <span className="text-xs text-amber-800">
-                Total piutang: <strong>{formatRupiah(totalUnpaidNominal)}</strong>
+              <span className="text-amber-700 font-semibold ml-1.5">
+                • {formatRupiah(totalUnpaidNominal)}
               </span>
             </div>
           </div>
-          <button
-            onClick={() => setFilter('UNPAID')}
-            className="px-3 py-1.5 bg-slate-900 active:bg-black text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
-          >
-            Lihat
-          </button>
+          {filter !== 'UNPAID' && (
+            <button
+              onClick={() => setFilter('UNPAID')}
+              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white rounded-md text-[11px] font-bold cursor-pointer transition shrink-0"
+            >
+              Lihat Kasbon
+            </button>
+          )}
         </div>
       )}
 
-      {/* Filter Tabs - Clean Horizontal Bar (Edge-to-Edge dengan px-4) */}
-      <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center gap-2 overflow-x-auto no-scrollbar">
+      {/* 2. Filter Tabs (FLAT EDGE-TO-EDGE DENGAN LEBAR VERTIKAL NYAMAN) */}
+      <div className="px-4 py-3 bg-white border-b border-slate-200 flex items-center gap-2.5">
         <button
           onClick={() => setFilter('ALL')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 ${
+          className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer text-center ${
             filter === 'ALL'
               ? 'bg-slate-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-200'
+              : 'bg-slate-100 text-slate-600 hover:text-slate-900'
           }`}
         >
           Semua ({transactions.length})
@@ -99,17 +104,17 @@ export const OrdersAndDebts: React.FC = () => {
 
         <button
           onClick={() => setFilter('UNPAID')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 active:scale-95 ${
+          className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
             filter === 'UNPAID'
               ? 'bg-slate-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-200'
+              : 'bg-slate-100 text-slate-600 hover:text-slate-900'
           }`}
         >
-          <span>Piutang</span>
+          <span>Kasbon</span>
           {unpaidCount > 0 && (
             <span
-              className={`px-1.5 py-0.2 text-[10px] rounded-full font-black ${
-                filter === 'UNPAID' ? 'bg-white text-slate-900' : 'bg-slate-200 text-slate-800'
+              className={`px-1.5 py-0.5 text-[10px] rounded-full font-black ${
+                filter === 'UNPAID' ? 'bg-white text-slate-900' : 'bg-amber-100 text-amber-800'
               }`}
             >
               {unpaidCount}
@@ -119,97 +124,95 @@ export const OrdersAndDebts: React.FC = () => {
 
         <button
           onClick={() => setFilter('PAID')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer active:scale-95 ${
+          className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer text-center ${
             filter === 'PAID'
               ? 'bg-slate-900 text-white shadow-xs'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-200'
+              : 'bg-slate-100 text-slate-600 hover:text-slate-900'
           }`}
         >
           Lunas
         </button>
       </div>
 
-      {/* Transaction List (Edge-to-Edge) OR Clean Empty State */}
-      {filtered.length === 0 ? (
-        <div className="py-24 px-6 text-center space-y-3">
-          <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
-            <Receipt className="w-7 h-7 stroke-[1.5]" />
+      {/* 3. Transaction List (FLAT EDGE-TO-EDGE, LEBAR VERTIKAL LEGA) */}
+      <div className="bg-white divide-y divide-slate-100 border-b border-slate-200">
+        {filtered.length === 0 ? (
+          <div className="py-24 px-4 text-center space-y-2">
+            <Receipt className="w-8 h-8 text-slate-300 mx-auto" />
+            <p className="text-xs text-slate-400">
+              Tidak ada transaksi pada filter ini.
+            </p>
           </div>
-          <p className="text-sm font-medium text-slate-500">
-            Belum ada transaksi hari ini
-          </p>
-        </div>
-      ) : (
-        <div className="bg-white divide-y divide-slate-100 border-t border-b border-slate-100">
-          {filtered.map((t) => {
+        ) : (
+          filtered.map((t) => {
             const isUnpaid = t.paymentStatus === 'UNPAID';
 
             return (
               <div
                 key={t.id}
-                className="px-4 py-4.5 sm:py-5 hover:bg-slate-50 active:bg-slate-100/80 transition-colors flex items-center justify-between gap-3"
+                className="px-4 py-4.5 sm:py-5 hover:bg-slate-50/70 transition-colors flex items-center justify-between gap-3 text-xs"
               >
-                <div className="min-w-0 space-y-1">
+                <div className="min-w-0 space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span
-                      className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                         isUnpaid
-                          ? 'bg-slate-100 text-slate-900 border border-slate-300'
-                          : 'bg-slate-100 text-slate-600'
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'bg-emerald-50 text-emerald-700'
                       }`}
                     >
-                      {isUnpaid ? 'BELUM LUNAS' : 'LUNAS'}
+                      {isUnpaid ? 'Kasbon' : 'Lunas'}
                     </span>
-                    <span className="text-xs text-slate-400 font-mono">
+                    <span className="text-[11px] text-slate-400 font-medium">
                       {formatDateTime(t.date)}
                     </span>
                   </div>
 
-                  <h4 className="font-semibold text-slate-900 text-base truncate flex items-center gap-1.5">
+                  <h4 className="font-bold text-slate-900 text-sm truncate flex items-center gap-1.5">
                     <span className="truncate">{t.productName}</span>
                     {t.quantity && t.quantity > 1 ? (
-                      <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
-                        {t.quantity}x
+                      <span className="text-[10px] font-bold text-slate-500 shrink-0">
+                        ({t.quantity}x)
                       </span>
                     ) : null}
                   </h4>
 
                   {t.customerTarget && (
-                    <p className="text-sm text-slate-600 font-medium truncate">
-                      Tujuan: <span className="font-semibold text-slate-800">{t.customerTarget}</span>
+                    <p className="text-[11px] text-slate-500 font-medium truncate">
+                      Tujuan: <span className="font-semibold text-slate-700">{t.customerTarget}</span>
                     </p>
                   )}
 
-                  <div className="text-xs text-slate-500 flex items-center gap-2">
+                  <div className="text-[11px] text-slate-400 flex items-center gap-2">
                     <span>Modal: {formatRupiah(t.costPrice)}</span>
                     <span>•</span>
-                    <span className="text-slate-800 font-medium">Laba: +{formatRupiah(t.profit)}</span>
+                    <span className="text-emerald-600 font-semibold">Laba: +{formatRupiah(t.profit)}</span>
                   </div>
                 </div>
 
                 <div className="text-right shrink-0 space-y-2">
-                  <div className="text-base font-bold text-slate-900 tracking-tight">
+                  <div className="text-base font-extrabold text-slate-900 tracking-tight">
                     {formatRupiah(t.sellingPrice)}
                   </div>
 
                   {isUnpaid ? (
                     <button
                       onClick={() => handleOpenSettle(t)}
-                      className="px-4 py-1.5 bg-slate-900 active:bg-black text-white font-bold rounded-xl text-xs shadow-2xs cursor-pointer transition active:scale-95"
+                      className="px-3.5 py-1.5 bg-slate-900 active:bg-black text-white font-bold rounded-lg text-xs cursor-pointer transition active:scale-95 shadow-2xs"
                     >
                       Lunasi
                     </button>
                   ) : (
-                    <span className="text-xs text-slate-400 font-medium block">
+                    <span className="text-[11px] text-slate-400 font-medium block">
                       {t.paymentMethod}
                     </span>
                   )}
                 </div>
               </div>
             );
-          })}
-        </div>
-      )}
+          })
+        )}
+      </div>
 
       {/* Pelunasan Piutang Modal */}
       {settleTxn && (

@@ -304,7 +304,7 @@ function AppContent() {
   const totalCartProfit = totalCartSelling - totalCartCost;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
+    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-slate-900 selection:text-white">
       {/* PWA Install Notification Bar */}
       {!hideAppHeader && <PWAInstallBanner />}
 
@@ -529,11 +529,7 @@ function AppContent() {
               </div>
             )}
 
-            {subTab === 'pesanan' && (
-              <div className="py-3">
-                <OrdersAndDebts />
-              </div>
-            )}
+            {subTab === 'pesanan' && <OrdersAndDebts />}
           </>
         ) : activeView === 'products' ? (
           <ProductManagement onBackToCashier={() => setActiveView('cashier')} />
